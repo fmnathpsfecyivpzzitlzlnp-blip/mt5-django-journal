@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="text-light">📊 Аналитика & Проп-Трекер</h4>
+    <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#propSettings">⚙️ Настройки Счета</button>
+</div>
+
+<div class="collapse mb-4" id="propSettings">
+    <div class="card shadow p-3 border-info">
+        <h6 class="text-info mb-3">Параметры челленджа (FTMO / FundedNext и др.)</h6>
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="small text-secondary">Стартовый баланс ($)</label>
+                <input type="number" id="prop-bal" class="form-control bg-dark text-light border-secondary" value="100000">
+            </div>
+            <div class="col-md-3">
+                <label class="small text-secondary">Цель профита (%)</label>
+                <input type="number" id="prop-target" class="form-control bg-dark text-light border-secondary" value="8">
+            </div>
+            <div class="col-md-3">
+                <label class="small text-secondary">Дневной лимит потерь (%)</label>
+                <input type="number" id="prop-dl" class="form-control bg-dark text-light border-secondary" value="5">
+            </div>
+            <div class="col-md-3">
+                <label class="small text-secondary">Макс. просадка (%)</label>
+                <input type="number" id="prop-dd" class="form-control bg-dark text-light border-secondary" value="10">
+            </div>
+        </div>
+        <button class="btn btn-info w-100 mt-3 fw-bold text-dark" onclick="savePropSettings()">Сохранить и Пересчитать</button>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card p-3 h-100 shadow border-success">
+            <h6 class="text-success text-center">🏆 Цель: <span id="text-target-usd">$0</span></h6>
+            <div class="progress mt-2" style="height: 25px; background-color: #222;">
+                <div id="bar-target" class="progress-bar bg-success fw-bold" style="width: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-2 small text-secondary" id="text-target-left">Осталось: $0</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card p-3 h-100 shadow border-warning">
+            <h6 class="text-warning text-center">📉 Дневной Лимит: <span id="text-dl-usd">$0</span></h6>
+            <div class="progress mt-2" style="height: 25px; background-color: #222;">
+                <div id="bar-dl" class="progress-bar bg-warning text-dark fw-bold" style="width: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-2 small text-secondary" id="text-dl-left">PnL сегодня: $0</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card p-3 h-100 shadow border-danger">
+            <h6 class="text-danger text-center">💀 Макс. Просадка: <span id="text-dd-usd">$0</span></h6>
+            <div class="progress mt-2" style="height: 25px; background-color: #222;">
+                <div id="bar-dd" class="progress-bar bg-danger fw-bold" style="width: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-2 small text-secondary" id="text-dd-left">Просадка от пика: $0</div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow p-3 mb-4">
+    <h5 class="text-light mb-3 text-center">📈 Кривая Капитала (Equity Curve)</h5>
+    <canvas id="equityChart" style="max-height: 350px;"></canvas>
+</div>
+
+<div class="card mb-4 p-3 shadow">
+    <h5 class="text-light mb-3 text-center">Календарь Прибыльности (Последние 30 дней)</h5>
+    <div class="d-flex flex-wrap justify-content-center gap-2" id="heatmap-container"></div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Психология</h6><canvas id="psyChart"></canvas></div></div>
+    <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Сетапы</h6><canvas id="setupChart"></canvas></div></div>
+    <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Таймфреймы</h6><canvas id="tfChart"></canvas></div></div>
+
+    <div class="col-12 mb-4">
+        <div class="card p-3 shadow">
+            <h6 class="text-center text-secondary mb-3">PnL по часам (В вашей временной зоне)</h6>
+            <canvas id="sessionChart" style="max-height: 300px;"></canvas>
+
+            <div class="mt-4 text-center d-flex flex-wrap justify-content-center gap-2">
+                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">🌙 Азия (23:00-04:00)</span>
+                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">☕ Лондон (06:00-10:00)</span>
+                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">🗽 NY AM (11:00-16:00)</span>
+                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">🏙️ NY PM (17:00-21:00)</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let setupChartInstance, tfChartInstance, sessionChartInstance, psyChartInstance, equityChartInstance;
+    let allTrades = [];
+
+    async function initPage() {
+        // Загружаем настройки пропа
+        document.getElementById('prop-bal').value = localStorage.getItem('prop_bal') || 100000;
+        document.getElementById('prop-target').value = localStorage.getItem('prop_target') || 8;
+        document.getElementById('prop-dl').value = localStorage.getItem('prop_dl') || 5;
+        document.getElementById('prop-dd').value = localStorage.getItem('prop_dd') || 10;
+
+        const tzOffset = localStorage.getItem('user_tz_offset') || "+3";
+
+        // Грузим стату
+        const statsRes = await fetch(API_BASE + `trades/stats/?tz_offset=${tzOffset}`);
+        const statsData = await statsRes.json();
+        renderCharts(statsData);
+
+        // Грузим все сделки для Equity и Heatmap
+        const tradesRes = await fetch(API_BASE + 'trades/?is_processed=true');
+        allTrades = await tradesRes.json();
+
+        // Сортируем сделки от старых к новым для правильного графика
+        allTrades.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+        renderHeatmap(allTrades);
+        calculatePropTracker(allTrades);
+    }
+
+    function savePropSettings() {
+        localStorage.setItem('prop_bal', document.getElementById('prop-bal').value);
+        localStorage.setItem('prop_target', document.getElementById('prop-target').value);
+        localStorage.setItem('prop_dl', document.getElementById('prop-dl').value);
+        localStorage.setItem('prop_dd', document.getElementById('prop-dd').value);
+        calculatePropTracker(allTrades);
+    }
+
+    function calculatePropTracker(trades) {
+        const startBal = parseFloat(document.getElementById('prop-bal').value);
+        const targetPct = parseFloat(document.getElementById('prop-target').value);
+        const dlPct = parseFloat(document.getElementById('prop-dl').value);
+        const ddPct = parseFloat(document.getElementById('prop-dd').value);
+
+        const targetUSD = startBal * (targetPct / 100);
+        const dlUSD = startBal * (dlPct / 100);
+        const ddUSD = startBal * (ddPct / 100);
+
+        let currentEq = startBal;
+        let peakEq = startBal;
+        let maxDrawdownUSD = 0;
+        let totalPnL = 0;
+        let dailyPnL = 0;
+
+        // Определяем "сегодня" с учетом сдвига
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        let eqData = [startBal];
+        let eqLabels = ['Start'];
+
+        trades.forEach(t => {
+            currentEq += t.profit;
+            totalPnL += t.profit;
+
+            eqData.push(currentEq);
+            eqLabels.push('#' + t.ticket);
+
+            // Считаем High Water Mark (Пик баланса)
+            if (currentEq > peakEq) peakEq = currentEq;
+
+            // Считаем текущую просадку от пика
+            let currentDrawdown = peakEq - currentEq;
+            if (currentDrawdown > maxDrawdownUSD) maxDrawdownUSD = currentDrawdown;
+
+            // Считаем профит за сегодня
+            if (t.time.startsWith(todayStr)) {
+                dailyPnL += t.profit;
+            }
+        });
+
+        // 🏆 Обновляем ЦЕЛЬ
+        document.getElementById('text-target-usd').innerText = `$${targetUSD}`;
+        let targetProgress = Math.min(100, Math.max(0, (totalPnL / targetUSD) * 100));
+        let barTarget = document.getElementById('bar-target');
+        barTarget.style.width = `${targetProgress}%`;
+        barTarget.innerText = `${targetProgress.toFixed(1)}%`;
+        document.getElementById('text-target-left').innerText = `Осталось: $${Math.max(0, targetUSD - totalPnL).toFixed(2)}`;
+
+        // 📉 Обновляем ДНЕВНОЙ ЛИМИТ
+        document.getElementById('text-dl-usd').innerText = `$${dlUSD}`;
+        let dlProgress = dailyPnL < 0 ? Math.min(100, (Math.abs(dailyPnL) / dlUSD) * 100) : 0;
+        let barDl = document.getElementById('bar-dl');
+        barDl.style.width = `${dlProgress}%`;
+        barDl.innerText = `${dlProgress.toFixed(1)}%`;
+        if(dlProgress > 80) barDl.classList.replace('bg-warning', 'bg-danger'); // Краснеет при опасности
+        else barDl.classList.replace('bg-danger', 'bg-warning');
+        document.getElementById('text-dl-left').innerText = `PnL сегодня: $${dailyPnL.toFixed(2)}`;
+
+        // 💀 Обновляем МАКС ПРОСАДКУ
+        document.getElementById('text-dd-usd').innerText = `$${ddUSD}`;
+        let ddProgress = Math.min(100, (maxDrawdownUSD / ddUSD) * 100);
+        let barDd = document.getElementById('bar-dd');
+        barDd.style.width = `${ddProgress}%`;
+        barDd.innerText = `${ddProgress.toFixed(1)}%`;
+        document.getElementById('text-dd-left').innerText = `Просадка от пика: $${maxDrawdownUSD.toFixed(2)}`;
+
+        // 📈 Отрисовка Equity Curve
+        if(equityChartInstance) equityChartInstance.destroy();
+        const ctx = document.getElementById('equityChart').getContext('2d');
+
+        // Градиент для красоты
+        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(0, 230, 118, 0.5)');
+        gradient.addColorStop(1, 'rgba(0, 230, 118, 0.0)');
+
+        equityChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: eqLabels,
+                datasets: [{
+                    label: 'Баланс ($)',
+                    data: eqData,
+                    borderColor: '#00e676',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointBackgroundColor: '#fff'
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: '#333' } },
+                    x: { display: false } // Прячем тикеты снизу, чтобы не засорять
+                },
+                interaction: { intersect: false, mode: 'index' }
+            }
+        });
+    }
+
+    function renderHeatmap(trades) {
+        const daily = {}; trades.forEach(t => { const d = t.time.split('T')[0]; daily[d] = (daily[d] || 0) + t.profit; });
+        let html = '';
+        for(let i=29; i>=0; i--) {
+            let d = new Date(); d.setDate(d.getDate() - i); let ds = d.toISOString().split('T')[0]; let p = daily[ds] || 0;
+            let c = p > 0 ? `rgba(0, 230, 118, ${Math.min(0.2+p/1500, 1)})` : (p < 0 ? `rgba(255, 82, 82, ${Math.min(0.2+Math.abs(p)/1500, 1)})` : '#333');
+            html += `<div class="heatmap-box" title="${ds} | $${p.toFixed(2)}" style="background-color: ${c}"></div>`;
+        }
+        document.getElementById('heatmap-container').innerHTML = html;
+    }
+
+    function renderCharts(data) {
+        if(setupChartInstance) setupChartInstance.destroy();
+        if(tfChartInstance) tfChartInstance.destroy();
+        if(sessionChartInstance) sessionChartInstance.destroy();
+        if(psyChartInstance) psyChartInstance.destroy();
+
+        if(data.by_setup) setupChartInstance = new Chart(document.getElementById('setupChart'), { type: 'bar', data: { labels: data.by_setup.map(s => s.strategy_name||'N/A'), datasets: [{ label: 'PnL', data: data.by_setup.map(s => s.pnl), backgroundColor: data.by_setup.map(s => s.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+        if(data.by_timeframe) tfChartInstance = new Chart(document.getElementById('tfChart'), { type: 'bar', data: { labels: data.by_timeframe.map(t => t.timeframe||'N/A'), datasets: [{ label: 'PnL', data: data.by_timeframe.map(t => t.pnl), backgroundColor: data.by_timeframe.map(t => t.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+        if(data.by_hour) sessionChartInstance = new Chart(document.getElementById('sessionChart'), { type: 'bar', data: { labels: data.by_hour.map(h => h.hour), datasets: [{ label: 'PnL ($)', data: data.by_hour.map(h => h.pnl), backgroundColor: data.by_hour.map(h => h.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } }, x: { grid: { display: false } } } } });
+        if(data.by_psychology) psyChartInstance = new Chart(document.getElementById('psyChart'), { type: 'bar', data: { labels: data.by_psychology.map(p => p.psychology), datasets: [{ label: 'PnL ($)', data: data.by_psychology.map(p => p.pnl), backgroundColor: data.by_psychology.map(p => p.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+    }
+</script>
+{% endblock %}

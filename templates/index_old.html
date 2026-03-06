@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Торговый Дашборд PRO MAX SaaS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #121212; color: #eee; font-family: 'Segoe UI', sans-serif; }
+        .card { background-color: #1e1e1e; border: none; border-radius: 10px; }
+        .profit-positive { color: #00e676 !important; }
+        .profit-negative { color: #ff5252 !important; }
+        .nav-tabs .nav-link { color: #aaa; border: none; }
+        .nav-tabs .nav-link.active { background-color: transparent; color: #00e676; border-bottom: 3px solid #00e676; }
+        .heatmap-box { width: 22px; height: 22px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .heatmap-box:hover { transform: scale(1.2); border: 1px solid #fff; }
+        #auth-screen { height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .trade-details { max-width: 250px; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-screen" style="display: none;">
+        <div class="card p-4 shadow-lg text-center" style="width: 100%; max-width: 400px;">
+            <h3 class="text-success mb-3">Trading Journal</h3>
+
+            <ul class="nav nav-tabs mb-3 justify-content-center" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#login-tab">Вход</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#register-tab">Регистрация</button></li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active text-center" id="login-tab">
+                    <p class="text-secondary small">Для доступа необходимо войти в систему</p>
+                    <button class="btn btn-success w-100 fw-bold py-2" onclick="redirectToLogin()">ВОЙТИ</button>
+                </div>
+                <div class="tab-pane fade" id="register-tab">
+                    <div class="mb-2"><input type="text" id="reg-user" class="form-control bg-dark text-light border-secondary" placeholder="Придумайте Логин"></div>
+                    <div class="mb-3"><input type="password" id="reg-pass" class="form-control bg-dark text-light border-secondary" placeholder="Придумайте Пароль"></div>
+                    <button class="btn btn-primary w-100 fw-bold py-2" onclick="registerAccount()">ЗАРЕГИСТРИРОВАТЬСЯ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-content" style="display: none;">
+        <div class="container mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-light m-0">XAUUSD | Journal PRO</h2>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary px-3" onclick="openProfile()">⚙️ Профиль</button>
+                    <button class="btn btn-sm btn-outline-danger px-3" onclick="logout()">Выйти</button>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#journal">Дневник</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#analytics">Аналитика</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#playbook">Playbook</button></li>
+            </ul>
+
+            <div class="tab-content" id="myTabContent">
+                <div class="tab-pane fade show active" id="journal">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <input type="file" id="csv-upload" accept=".csv" style="display: none;" onchange="uploadCSV()">
+                            <button class="btn btn-success me-2" onclick="document.getElementById('csv-upload').click()">📥 Импорт истории (CSV)</button>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3" id="stats-container"></div>
+                    <div class="row mb-4" id="adv-stats-container"></div>
+
+                    <div class="card shadow mb-4">
+                        <div class="card-body py-3">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-3">
+                                    <select id="filter-type" class="form-select bg-dark text-light border-secondary">
+                                        <option value="">Все направления</option>
+                                        <option value="BUY">Только BUY</option>
+                                        <option value="SELL">Только SELL</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <select id="filter-tf" class="form-select bg-dark text-light border-secondary">
+                                        <option value="">Все таймфреймы</option>
+                                        <option value="M1">M1</option><option value="M5">M5</option><option value="M15">M15</option><option value="H1">H1</option><option value="H4">H4</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск по сетапу или комментарию...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover m-0 align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th class="ps-3">Дата / Тикет</th>
+                                            <th>Направление</th>
+                                            <th>PnL ($)</th>
+                                            <th>Детали</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="trades-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="analytics">
+                    <div class="card mb-4 p-3 shadow">
+                        <h5 class="text-light mb-3 text-center">Календарь Прибыльности (Последние 30 дней)</h5>
+                        <div class="d-flex flex-wrap justify-content-center gap-2" id="heatmap-container"></div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Сетапы</h6><canvas id="setupChart"></canvas></div></div>
+                        <div class="col-md-6 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Таймфреймы</h6><canvas id="tfChart"></canvas></div></div>
+
+                        <div class="col-12 mb-4">
+                            <div class="card p-3 shadow">
+                                <h6 class="text-center text-secondary mb-3">PnL по часам (В вашей временной зоне)</h6>
+                                <canvas id="sessionChart" style="max-height: 300px;"></canvas>
+
+                                <div class="mt-4 text-center d-flex flex-wrap justify-content-center gap-2">
+                                    <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555; font-size: 0.9em;">🌙 Азия <span class="text-warning" id="legend-asia"></span></span>
+                                    <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555; font-size: 0.9em;">☕ Лондон <span class="text-info" id="legend-london"></span></span>
+                                    <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555; font-size: 0.9em;">🗽 NY AM <span class="text-success" id="legend-nyam"></span></span>
+                                    <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555; font-size: 0.9em;">🏙️ NY PM <span class="text-primary" id="legend-nypm"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="playbook">
+                    <div class="row" id="playbook-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="profileModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">⚙️ Настройки</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label text-secondary small">Смещение времени (от UTC)</label>
+                    <select id="settings-tz" class="form-select bg-dark text-light border-secondary">
+                        <option value="0">Без смещения (UTC)</option>
+                        <option value="-4">Нью-Йорк (UTC-4)</option>
+                        <option value="+2">Киев / Вост. Европа (UTC+2)</option>
+                        <option value="+3">Москва / Минск (UTC+3)</option>
+                        <option value="+5">Ташкент (UTC+5)</option>
+                    </select>
+                    <div class="form-text text-secondary mt-2" style="font-size: 0.8em;">Графики и расписание Killzones автоматически перестроятся под это время.</div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-success w-100" onclick="saveProfile()">Сохранить изменения</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editTradeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">Сделка #<span id="modal-ticket"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-trade-form">
+                        <input type="hidden" id="trade-id">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="form-label text-secondary small">Таймфрейм</label>
+                                <select id="trade-tf" class="form-select bg-dark text-light border-secondary">
+                                    <option value="">Не выбран</option>
+                                    <option value="M1">M1</option><option value="M5">M5</option><option value="M15">M15</option><option value="H1">H1</option><option value="H4">H4</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-secondary small">Сетап</label>
+                                <input type="text" class="form-control bg-dark text-light border-secondary" id="trade-setup">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-secondary small">Скриншоты</label>
+                            <input class="form-control bg-dark text-light border-secondary mb-2" type="file" id="upload-entry">
+                            <input class="form-control bg-dark text-light border-secondary" type="file" id="upload-exit">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-secondary small">Комментарий</label>
+                            <textarea class="form-control bg-dark text-light border-secondary" id="trade-comment" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-success w-100" onclick="saveTradeDetails()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = '/api/';
+        let allTradesData = [];
+        let setupChartInstance = null; let tfChartInstance = null; let sessionChartInstance = null;
+        let editModal = null; let profileModal = null;
+
+        function redirectToLogin() { window.location.href = '/api-auth/login/?next=/'; }
+
+        async function logout() {
+            await fetch('/api-auth/logout/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            window.location.href = '/api-auth/login/?next=/';
+        }
+
+        async function registerAccount() {
+            const u = document.getElementById('reg-user').value;
+            const p = document.getElementById('reg-pass').value;
+            const res = await fetch(API_BASE + 'register/', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            if(res.ok) { alert(data.message); document.querySelector('[data-bs-target="#login-tab"]').click(); } else { alert(data.error); }
+        }
+
+        async function uploadCSV() {
+            const file = document.getElementById('csv-upload').files[0]; if(!file) return;
+            const fd = new FormData(); fd.append('file', file);
+            alert("Загружаем файл... Пожалуйста, подождите.");
+            const res = await fetch(API_BASE + 'trades/upload_history/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            const data = await res.json();
+            if(res.ok) { alert(data.message); loadAllData(); } else { alert(data.error); }
+        }
+
+        function openProfile() {
+            const savedTz = localStorage.getItem('user_tz_offset') || "+3";
+            document.getElementById('settings-tz').value = savedTz;
+            profileModal.show();
+        }
+
+        function saveProfile() {
+            const selectedTz = document.getElementById('settings-tz').value;
+            localStorage.setItem('user_tz_offset', selectedTz);
+            profileModal.hide();
+            loadAllData();
+        }
+
+        // --- ДИНАМИЧЕСКАЯ ЛЕГЕНДА KILLZONES ---
+        function updateLegend(offset) {
+            let off = parseInt(offset);
+            const formatHour = (h) => (h < 0 ? h + 24 : h) % 24;
+            const pad = (h) => h.toString().padStart(2, '0') + ':00';
+
+            // Базовое время UTC (исходя из того, что NY = UTC-4)
+            const getRange = (startUTC, endUTC) => pad(formatHour(startUTC + off)) + ' - ' + pad(formatHour(endUTC + off));
+
+            document.getElementById('legend-asia').innerText = getRange(23, 4);   // Asia NY 19-00 -> UTC 23-04
+            document.getElementById('legend-london').innerText = getRange(6, 10); // London NY 02-06 -> UTC 06-10
+            document.getElementById('legend-nyam').innerText = getRange(11, 16);  // NY AM 07-12 -> UTC 11-16
+            document.getElementById('legend-nypm').innerText = getRange(17, 21);  // NY PM 13-17 -> UTC 17-21
+        }
+
+        async function checkAccess() {
+            try {
+                const res = await fetch(API_BASE + 'trades/stats/');
+                if (res.status === 403 || res.status === 401) { document.getElementById('auth-screen').style.display = 'flex'; }
+                else { document.getElementById('app-content').style.display = 'block'; loadAllData(); }
+            } catch (e) { document.getElementById('auth-screen').style.display = 'flex'; }
+        }
+
+        async function loadAllData() {
+            const tzOffset = localStorage.getItem('user_tz_offset') || "+3";
+            updateLegend(tzOffset); // <-- ОБНОВЛЯЕМ ТЕКСТ ЛЕГЕНДЫ
+
+            const statsRes = await fetch(API_BASE + `trades/stats/?tz_offset=${tzOffset}`);
+            const statsData = await statsRes.json();
+            if (statsData.overview) { renderStats(statsData); renderCharts(statsData); }
+
+            const tradesRes = await fetch(API_BASE + 'trades/');
+            allTradesData = await tradesRes.json();
+            applyFilters(); renderHeatmap(allTradesData); loadPlaybook();
+        }
+
+        function renderStats(data) {
+            const ov = data.overview; const pnlClass = ov.total_pnl >= 0 ? 'profit-positive' : 'profit-negative';
+            document.getElementById('stats-container').innerHTML = `
+                <div class="col-md-3"><div class="card p-3 shadow-sm text-center"><h6>Сделок</h6><h3 class="m-0">${ov.total_trades}</h3></div></div>
+                <div class="col-md-3"><div class="card p-3 shadow-sm text-center"><h6>Винрейт</h6><h3 class="m-0">${ov.winrate_percent}%</h3></div></div>
+                <div class="col-md-3"><div class="card p-3 shadow-sm text-center border-start border-4 ${ov.total_pnl >= 0 ? 'border-success' : 'border-danger'}"><h6>PnL</h6><h3 class="${pnlClass} fw-bold m-0">$${ov.total_pnl}</h3></div></div>
+                <div class="col-md-3"><div class="card p-3 shadow-sm text-center"><h6>R/R</h6><h3 class="m-0 text-info">1 : ${ov.rr_ratio}</h3></div></div>`;
+
+            document.getElementById('adv-stats-container').innerHTML = `
+                <div class="col-md-3"><div class="card p-2 bg-dark small">Средний +: <span class="profit-positive fw-bold">$${ov.avg_win}</span></div></div>
+                <div class="col-md-3"><div class="card p-2 bg-dark small">Средний -: <span class="profit-negative fw-bold">$${Math.abs(ov.avg_loss)}</span></div></div>
+                <div class="col-md-3"><div class="card p-2 bg-dark small">Win Streak: <span class="text-light fw-bold">${ov.max_win_streak}</span></div></div>
+                <div class="col-md-3"><div class="card p-2 bg-dark small">Loss Streak: <span class="text-light fw-bold">${ov.max_loss_streak}</span></div></div>`;
+        }
+
+        function renderTable(trades) {
+            let html = '';
+            trades.forEach(t => {
+                const date = new Date(t.time).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                const pClass = t.profit > 0 ? 'profit-positive' : 'profit-negative';
+                const tBadge = t.type === 'BUY' ? '<span class="badge bg-success bg-opacity-25 text-success">BUY</span>' : '<span class="badge bg-danger bg-opacity-25 text-danger">SELL</span>';
+                let screens = '';
+                if (t.screenshot_entry) screens += `<a href="${t.screenshot_entry}" target="_blank" class="btn btn-sm btn-outline-primary me-1 mb-1">📸 Вход</a>`;
+                if (t.screenshot_exit) screens += `<a href="${t.screenshot_exit}" target="_blank" class="btn btn-sm btn-outline-info me-1 mb-1">📸 Выход</a>`;
+
+                html += `<tr>
+                    <td class="ps-3 text-secondary small">${date}<br>#${t.ticket}</td>
+                    <td>${tBadge}<br><small class="text-muted">Vol: ${t.volume}</small></td>
+                    <td class="${pClass} fw-bold">$${t.profit}</td>
+                    <td class="trade-details"><span class="badge bg-secondary me-1">${t.timeframe || ''}</span> <strong>${t.strategy_name || ''}</strong><br><small class="text-muted">${t.comment || ''}</small></td>
+                    <td><button onclick="addToPlaybook(${t.id})" class="btn btn-sm btn-outline-warning" title="В Playbook">🌟</button>
+                    <button class="btn btn-sm btn-outline-light" onclick="openModal(${t.id}, ${t.ticket}, '${t.comment || ''}', '${t.timeframe || ''}', '${t.strategy_name || ''}')">✏️</button><div class="mt-1">${screens}</div></td>
+                </tr>`;
+            });
+            document.getElementById('trades-table-body').innerHTML = html;
+        }
+
+        function openModal(id, ticket, comment, tf, setup) {
+            document.getElementById('trade-id').value = id; document.getElementById('modal-ticket').innerText = ticket;
+            document.getElementById('trade-comment').value = comment; document.getElementById('trade-tf').value = tf; document.getElementById('trade-setup').value = setup;
+            editModal.show();
+        }
+
+        async function saveTradeDetails() {
+            const id = document.getElementById('trade-id').value; const fd = new FormData();
+            fd.append('comment', document.getElementById('trade-comment').value); fd.append('timeframe', document.getElementById('trade-tf').value); fd.append('strategy_name', document.getElementById('trade-setup').value);
+            const f1 = document.getElementById('upload-entry').files[0]; const f2 = document.getElementById('upload-exit').files[0];
+            if(f1) fd.append('screenshot_entry', f1); if(f2) fd.append('screenshot_exit', f2);
+            await fetch(`${API_BASE}trades/${id}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            editModal.hide(); loadAllData();
+        }
+
+        async function addToPlaybook(id) {
+            const res = await fetch(`${API_BASE}trades/${id}/to_playbook/`, { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            if(res.ok) { alert("🌟 Добавлено в Playbook!"); loadPlaybook(); } else { alert("Ошибка: Сначала добавьте скриншот выхода!"); }
+        }
+
+        async function loadPlaybook() {
+            const res = await fetch(API_BASE + 'playbook/'); const data = await res.json(); let html = '';
+            data.forEach(item => {
+                html += `<div class="col-md-4 mb-4"><div class="card h-100 shadow"><img src="${item.ideal_screenshot}" class="card-img-top" style="height:180px; object-fit:cover;"><div class="card-body"><h5>${item.title}</h5><span class="badge bg-primary">${item.setup_name}</span><p class="small text-secondary mt-2">${item.description}</p></div></div></div>`;
+            });
+            document.getElementById('playbook-container').innerHTML = html || '<p class="text-center text-muted w-100">Playbook пуст.</p>';
+        }
+
+        function applyFilters() {
+            const typeVal = document.getElementById('filter-type').value; const tfVal = document.getElementById('filter-tf').value; const searchVal = document.getElementById('filter-search').value.toLowerCase();
+            const filtered = allTradesData.filter(t => {
+                const matchType = typeVal ? t.type === typeVal : true; const matchTf = tfVal ? t.timeframe === tfVal : true; const matchSearch = (t.strategy_name + t.comment).toLowerCase().includes(searchVal);
+                return matchType && matchTf && matchSearch;
+            });
+            renderTable(filtered);
+        }
+
+        function renderHeatmap(trades) {
+            const daily = {};
+            trades.forEach(t => { const d = t.time.split('T')[0]; daily[d] = (daily[d] || 0) + t.profit; });
+            let html = '';
+            for(let i=29; i>=0; i--) {
+                let d = new Date(); d.setDate(d.getDate() - i); let dateStr = d.toISOString().split('T')[0]; let pnl = daily[dateStr] || 0;
+                let color = '#333';
+                if(pnl > 0) color = `rgba(0, 230, 118, ${Math.min(0.2 + pnl/1500, 1)})`; else if(pnl < 0) color = `rgba(255, 82, 82, ${Math.min(0.2 + Math.abs(pnl)/1500, 1)})`;
+                html += `<div class="heatmap-box" title="${dateStr} | $${pnl.toFixed(2)}" style="background-color: ${color};"></div>`;
+            }
+            document.getElementById('heatmap-container').innerHTML = html;
+        }
+
+        function renderCharts(data) {
+            if(setupChartInstance) setupChartInstance.destroy();
+            setupChartInstance = new Chart(document.getElementById('setupChart'), { type: 'bar', data: { labels: data.by_setup.map(s => s.strategy_name || 'N/A'), datasets: [{ label: 'PnL ($)', data: data.by_setup.map(s => s.pnl), backgroundColor: data.by_setup.map(s => s.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+
+            if(tfChartInstance) tfChartInstance.destroy();
+            tfChartInstance = new Chart(document.getElementById('tfChart'), { type: 'bar', data: { labels: data.by_timeframe.map(t => t.timeframe || 'N/A'), datasets: [{ label: 'PnL ($)', data: data.by_timeframe.map(t => t.pnl), backgroundColor: data.by_timeframe.map(t => t.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+
+            if(sessionChartInstance) sessionChartInstance.destroy();
+            if(data.by_hour) {
+                sessionChartInstance = new Chart(document.getElementById('sessionChart'), {
+                    type: 'bar',
+                    data: { labels: data.by_hour.map(h => h.hour), datasets: [{ label: 'PnL ($)', data: data.by_hour.map(h => h.pnl), backgroundColor: data.by_hour.map(h => h.pnl >= 0 ? '#00e676' : '#ff5252') }] },
+                    options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } }, x: { grid: { display: false } } } }
+                });
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) { cookieValue = decodeURIComponent(cookie.substring(name.length + 1)); break; }
+                }
+            }
+            return cookieValue;
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            editModal = new bootstrap.Modal(document.getElementById('editTradeModal'));
+            profileModal = new bootstrap.Modal(document.getElementById('profileModal'));
+            document.getElementById('filter-type').addEventListener('change', applyFilters);
+            document.getElementById('filter-tf').addEventListener('change', applyFilters);
+            document.getElementById('filter-search').addEventListener('input', applyFilters);
+            checkAccess();
+        });
+    </script>
+</body>
+</html>

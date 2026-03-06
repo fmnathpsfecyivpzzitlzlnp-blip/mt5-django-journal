@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <button class="btn btn-outline-warning fw-bold me-2" onclick="new bootstrap.Modal(document.getElementById('manualTradeModal')).show()">➕ Чужая сделка</button>
+    <h4 class="text-light">📥 Необработанные сделки (Inbox)</h4>
+    <button class="btn btn-primary fw-bold" onclick="processSelectedTrades()">Отправить в Дневник ➡️</button>
+</div>
+<div class="modal fade" id="manualTradeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-warning">
+            <div class="modal-header border-secondary bg-black">
+                <h5 class="modal-title text-warning">👽 Добавить чужую сделку на разбор</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Направление</label>
+                        <select id="man-type" class="form-select bg-dark text-light border-secondary">
+                            <option value="BUY">🟢 BUY (Лонг)</option>
+                            <option value="SELL">🔴 SELL (Шорт)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Актив</label>
+                        <input type="text" id="man-symbol" class="form-control bg-dark text-light border-secondary" value="XAUUSD">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Объем (Лот)</label>
+                        <input type="number" id="man-vol" class="form-control bg-dark text-light border-secondary" step="0.01" value="1.00">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">PnL ($)</label>
+                        <input type="number" id="man-pnl" class="form-control bg-dark text-light border-secondary" step="0.01" placeholder="Напр: 500 или -200">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Время закрытия</label>
+                        <input type="datetime-local" id="man-time" class="form-control bg-dark text-light border-secondary">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Тикет (необязательно)</label>
+                        <input type="text" id="man-ticket" class="form-control bg-dark text-light border-secondary" placeholder="Оставь пустым для авто">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-warning w-100 fw-bold" onclick="submitManualTrade()">Создать сделку</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card shadow p-3 mb-4 border-primary">
+    <h6 class="text-primary mb-3">🧩 Массовая разметка (Контекст и Психология)</h6>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <label class="small text-secondary">Макро-Тренд</label>
+            <select id="bulk-trend" class="form-select form-select-sm bg-dark text-light border-secondary">
+                <option value="">-- Выбрать --</option>
+                <option value="Лонговый">📈 Лонговый</option>
+                <option value="Шортовый">📉 Шортовый</option>
+                <option value="Боковик">↔️ Боковик</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="small text-secondary">Логика входа</label>
+            <select id="bulk-logic" class="form-select form-select-sm bg-dark text-light border-secondary">
+                <option value="">-- Выбрать --</option>
+                <option value="По тренду">✅ По тренду</option>
+                <option value="Разворот">🔄 Разворот</option>
+                <option value="Тест/Ошибка">🔧 Техническая (Тест/Сбой)</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="small text-secondary">Психология (Причина)</label>
+            <select id="bulk-psy" class="form-select form-select-sm bg-dark text-light border-secondary">
+                <option value="">-- Не выбрано --</option>
+                <option value="Идеально по плану">🟢 Идеально по плану</option>
+                <option value="FOMO (Жадность)">🟡 FOMO (Жадность / Боялся упустить)</option>
+                <option value="Страх (Неуверенность)">🟠 Страх (Неуверенность / Рано вышел)</option>
+                <option value="Тильт (Отыгрыш)">🔴 Тильт (Попытка отыграться)</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="small text-secondary">Ранг сделки</label>
+            <select id="bulk-grade" class="form-select form-select-sm bg-dark text-light border-secondary">
+                <option value="">-- Не оценен --</option>
+                <option value="A+">🔥 A+ (Идеал)</option>
+                <option value="B">👍 B (Норм)</option>
+                <option value="C">⚠️ C (Слабый / Пиво)</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row g-2">
+        <div class="col-md-12">
+            <label class="small text-secondary">Общий комментарий к выделенным сделкам</label>
+            <input type="text" id="bulk-comment" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Опиши общую идею...">
+        </div>
+    </div>
+</div>
+
+<div class="card shadow p-3 mb-4 border-secondary bg-dark">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="small text-secondary mb-1">Направление</label>
+            <select id="inbox-filter-type" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyInboxFilters()">
+                <option value="">Все</option>
+                <option value="BUY">BUY</option>
+                <option value="SELL">SELL</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="small text-secondary mb-1">Поиск (Тикет или Объем)</label>
+            <input type="text" id="inbox-filter-search" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Напр: 1.12 или #1463..." oninput="applyInboxFilters()">
+        </div>
+        <div class="col-md-3">
+            <label class="small text-secondary mb-1">Дата (От)</label>
+            <input type="date" id="inbox-filter-date-from" class="form-control form-control-sm bg-dark text-light border-secondary" onchange="applyInboxFilters()">
+        </div>
+        <div class="col-md-3">
+            <label class="small text-secondary mb-1">Дата (До)</label>
+            <input type="date" id="inbox-filter-date-to" class="form-control form-control-sm bg-dark text-light border-secondary" onchange="applyInboxFilters()">
+        </div>
+    </div>
+</div>
+<div class="card shadow">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle m-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3"><input type="checkbox" id="select-all" class="form-check-input" onclick="toggleAll(this)"></th>
+                        <th>Дата / Тикет</th>
+                        <th>Скриншот</th>
+                        <th>Направление</th>
+                        <th>PnL ($)</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="inbox-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let inboxTrades = [];
+
+    async function initPage() {
+        const res = await fetch(API_BASE + 'trades/?is_processed=false');
+        inboxTrades = await res.json();
+
+        // Вместо прямого рендера вызываем фильтрацию (чтобы при обновлении страницы фильтры не сбрасывались)
+        applyInboxFilters();
+
+        if (typeof updateNavBadges === 'function') updateNavBadges();
+    }
+
+    // 👇 НОВАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ 👇
+    function applyInboxFilters() {
+        const typeVal = document.getElementById('inbox-filter-type').value;
+        const searchVal = document.getElementById('inbox-filter-search').value.toLowerCase();
+        const dateFrom = document.getElementById('inbox-filter-date-from').value;
+        const dateTo = document.getElementById('inbox-filter-date-to').value;
+
+        const filtered = inboxTrades.filter(t => {
+            // Фильтр по направлению
+            const matchType = typeVal ? t.type === typeVal : true;
+
+            // Фильтр по тексту (Тикет или Объем)
+            const matchSearch = (
+                (t.ticket || '').toString().toLowerCase().includes(searchVal) ||
+                (t.volume || '').toString().toLowerCase().includes(searchVal)
+            );
+
+            // Фильтр по дате
+            let matchDate = true;
+            if (dateFrom || dateTo) {
+                const tDate = new Date(t.time);
+                tDate.setHours(0,0,0,0); // Сбрасываем время для точного сравнения дат
+
+                if (dateFrom) {
+                    const fromObj = new Date(dateFrom);
+                    fromObj.setHours(0,0,0,0);
+                    if (tDate < fromObj) matchDate = false;
+                }
+                if (dateTo) {
+                    const toObj = new Date(dateTo);
+                    toObj.setHours(0,0,0,0);
+                    if (tDate > toObj) matchDate = false;
+                }
+            }
+
+            return matchType && matchSearch && matchDate;
+        });
+
+        // Снимаем общую галочку "Выбрать все" при изменении фильтров
+        document.getElementById('select-all').checked = false;
+
+        renderInbox(filtered);
+    }
+
+    function renderInbox(trades) {
+        let html = '';
+        trades.forEach(t => {
+            const date = new Date(t.time).toLocaleString('ru-RU');
+            const pClass = t.profit > 0 ? 'profit-positive' : 'profit-negative';
+            const tBadge = t.type === 'BUY' ? '<span class="badge bg-success bg-opacity-25 text-success">BUY</span>' : '<span class="badge bg-danger bg-opacity-25 text-danger">SELL</span>';
+
+            let screenBtn = '';
+            if (t.auto_screen_d1) screenBtn += `<a href="${t.auto_screen_d1}" target="_blank" class="badge bg-primary text-decoration-none me-1">D1</a>`;
+            if (t.auto_screen_h4) screenBtn += `<a href="${t.auto_screen_h4}" target="_blank" class="badge bg-primary text-decoration-none me-1">H4</a>`;
+            if (t.auto_screen_h1) screenBtn += `<a href="${t.auto_screen_h1}" target="_blank" class="badge bg-primary text-decoration-none me-1">H1</a>`;
+            if (t.auto_screen_m15) screenBtn += `<a href="${t.auto_screen_m15}" target="_blank" class="badge bg-primary text-decoration-none me-1">M15</a>`;
+            if (t.auto_screen_m5) screenBtn += `<a href="${t.auto_screen_m5}" target="_blank" class="badge bg-primary text-decoration-none me-1">M5</a>`;
+            if (t.auto_screen_m1) screenBtn += `<a href="${t.auto_screen_m1}" target="_blank" class="badge bg-primary text-decoration-none me-1">M1</a>`;
+            if (t.screenshot_exit) screenBtn += `<a href="${t.screenshot_exit}" target="_blank" class="badge bg-info text-dark text-decoration-none me-1">Выход</a>`;
+            if (!screenBtn) screenBtn = '<span class="text-muted small">Нет скринов</span>';
+
+            html += `<tr>
+                <td class="ps-3"><input type="checkbox" class="form-check-input trade-checkbox" value="${t.id}"></td>
+                <td class="text-secondary small">${date}<br>#${t.ticket}</td>
+                <td>${screenBtn}</td>
+                <td>${tBadge}<br><small class="text-muted">Vol: ${t.volume}</small></td>
+                <td class="${pClass} fw-bold">$${t.profit}</td>
+                <td>
+                    <button onclick="deleteTrade(${t.id}, '${t.ticket}')" class="btn btn-sm btn-outline-danger" title="Удалить сделку навсегда">🗑️</button>
+                </td>
+            </tr>`;
+        });
+        document.getElementById('inbox-table-body').innerHTML = html || '<tr><td colspan="6" class="text-center py-4 text-secondary">Сделки не найдены</td></tr>';
+    }
+
+    function toggleAll(source) {
+        let checkboxes = document.querySelectorAll('.trade-checkbox');
+        for(let i=0; i<checkboxes.length; i++) checkboxes[i].checked = source.checked;
+    }
+
+    async function processSelectedTrades() {
+        const selected = Array.from(document.querySelectorAll('.trade-checkbox:checked')).map(cb => parseInt(cb.value));
+        if (selected.length === 0) return alert("Выберите хотя бы одну сделку!");
+
+        const payload = {
+            trade_ids: selected,
+            setup_grade: document.getElementById('bulk-grade').value,
+            market_trend: document.getElementById('bulk-trend').value,
+            entry_logic: document.getElementById('bulk-logic').value,
+            psychology: document.getElementById('bulk-psy').value,
+            comment: document.getElementById('bulk-comment').value
+        };
+
+        const res = await fetch(API_BASE + 'trades/bulk_process/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Сделки улетели в Дневник! Детальный разбор сделаете там.");
+            document.getElementById('bulk-grade').value = '';
+            document.getElementById('bulk-psy').value = '';
+            document.getElementById('bulk-comment').value = '';
+            document.getElementById('bulk-trend').value = '';
+            document.getElementById('bulk-logic').value = '';
+
+            document.getElementById('select-all').checked = false;
+            initPage();
+        } else {
+            alert("Ошибка при переносе");
+        }
+    }
+
+    async function deleteTrade(id, ticket) {
+        if (confirm(`Вы уверены, что хотите удалить сделку #${ticket}? Это действие нельзя отменить.`)) {
+            const res = await fetch(`${API_BASE}trades/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+            if (res.ok) initPage();
+        }
+    }
+
+    async function submitManualTrade() {
+        const payload = {
+            type: document.getElementById('man-type').value,
+            symbol: document.getElementById('man-symbol').value,
+            volume: document.getElementById('man-vol').value,
+            profit: document.getElementById('man-pnl').value,
+            time: document.getElementById('man-time').value,
+            ticket: document.getElementById('man-ticket').value
+        };
+
+        if (!payload.profit || !payload.time) {
+            return alert("Укажи PnL и Время сделки!");
+        }
+
+        const res = await fetch(`${API_BASE}trades/add_manual/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            // Закрываем окно и чистим форму
+            bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
+            document.getElementById('man-pnl').value = '';
+            document.getElementById('man-time').value = '';
+
+            // Перерисовываем Входящие
+            initPage();
+        } else {
+            const err = await res.json();
+            alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,394 @@
+import requests
+from django.core.files.base import ContentFile
+from rest_framework import viewsets, serializers, permissions, status
+from rest_framework.response import Response
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from django.db.models import Sum, Q, Count
+from django.core.files.base import ContentFile
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep
+import csv
+from datetime import datetime, timedelta
+import pytz
+import base64
+from .serializers import TradeSerializer # <--- ДОБАВИТЬ ЭТУ СТРОКУ
+import random
+
+
+BROKER_TZ = pytz.timezone('Europe/Helsinki')
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+    if not username or not password: return Response({"error": "Укажите логин и пароль"},
+                                                     status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(username=username).exists(): return Response({"error": "Этот логин уже занят!"},
+                                                                        status=status.HTTP_400_BAD_REQUEST)
+    user = User.objects.create_user(username=username, password=password)
+    return Response({"message": "Аккаунт успешно создан!"}, status=status.HTTP_201_CREATED)
+
+
+class PlaybookSerializer(serializers.ModelSerializer):
+    class Meta: model = PlaybookPattern; fields = '__all__'
+
+
+class PlaybookViewSet(viewsets.ModelViewSet):
+    serializer_class = PlaybookSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self): return PlaybookPattern.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer): serializer.save(user=self.request.user)
+
+
+class TradeViewSet(viewsets.ModelViewSet):
+    serializer_class = TradeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Trade.objects.filter(user=self.request.user).order_by('-time')
+        is_processed = self.request.query_params.get('is_processed')
+        if is_processed is not None: qs = qs.filter(is_processed=(is_processed.lower() == 'true'))
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def to_playbook(self, request, pk=None):
+        trade = self.get_object()
+        if not trade.screenshot_exit: return Response({"error": "У сделки нет скриншота!"}, status=400)
+        try:
+            playbook = PlaybookPattern(
+                user=request.user, title=f"Эталон: #{trade.ticket} ({trade.symbol})",
+                description=trade.comment if trade.comment else "Добавлено из дневника",
+                setup_name=trade.strategy_name if trade.strategy_name else "Без сетапа",
+                timeframe=trade.timeframe if trade.timeframe else "Не указан"
+            )
+            playbook.ideal_screenshot.save(f"pb_{trade.ticket}.png", ContentFile(trade.screenshot_exit.read()),
+                                           save=True)
+            return Response({"status": "Успешно добавлено!"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def upload_history(self, request):
+        if 'file' not in request.FILES: return Response({"error": "Файл не найден"}, status=400)
+        try:
+            broker_offset_hours = int(request.POST.get('broker_offset', 3))
+        except ValueError:
+            broker_offset_hours = 3
+        try:
+            decoded_file = request.FILES['file'].read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            count = 0
+            for row in reader:
+                if not Trade.objects.filter(ticket=row.get('Ticket'), user=request.user).exists():
+                    naive_time = datetime.strptime(row.get('Time'), "%Y-%m-%d %H:%M:%S")
+                    utc_time = (naive_time - timedelta(hours=broker_offset_hours)).replace(tzinfo=pytz.UTC)
+                    Trade.objects.create(
+                        user=request.user, ticket=row.get('Ticket'), symbol=row.get('Symbol', 'UNKNOWN'),
+                        type=row.get('Type', 'BUY'), volume=float(row.get('Volume', 0)),
+                        entry_price=float(row.get('Price', 0)), profit=float(row.get('Profit', 0)),
+                        time=utc_time, strategy_name="Импорт", is_processed=True
+                    )
+                    count += 1
+            return Response({"message": f"Успешно импортировано {count} новых сделок!"})
+        except Exception as e:
+            return Response({"error": f"Ошибка обработки файла"}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def bulk_process(self, request):
+        trade_ids = request.data.get('trade_ids', [])
+        comment = request.data.get('comment', '')
+        psychology = request.data.get('psychology', '')
+        strategy_name = request.data.get('strategy_name', '')
+        setup_grade = request.data.get('setup_grade', '')
+        confluence_factors = request.data.get('confluence_factors', '')
+
+        # 👇 Достаем новые поля 👇
+        market_trend = request.data.get('market_trend', '')
+        entry_logic = request.data.get('entry_logic', '')
+
+        if not trade_ids: return Response({"error": "Сделки не выбраны"}, status=400)
+        trades = Trade.objects.filter(id__in=trade_ids, user=request.user)
+        for trade in trades:
+            if comment: trade.comment = comment
+            if psychology: trade.psychology = psychology
+            if strategy_name: trade.strategy_name = strategy_name
+            if setup_grade: trade.setup_grade = setup_grade
+            if confluence_factors: trade.confluence_factors = confluence_factors
+
+            # 👇 Сохраняем новые поля 👇
+            if market_trend: trade.market_trend = market_trend
+            if entry_logic: trade.entry_logic = entry_logic
+
+            trade.is_processed = True
+            trade.save()
+        return Response({"message": f"Успешно обработано {trades.count()} сделок!"})
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        try:
+            tz_offset = int(request.query_params.get('tz_offset', 0))
+        except ValueError:
+            tz_offset = 0
+
+        # 📊 НОВАЯ ЛОГИКА: Считаем сделки для меню
+        inbox_count = Trade.objects.filter(user=self.request.user, is_processed=False).count()
+        trades_qs = Trade.objects.filter(user=self.request.user, is_processed=True).exclude(entry_logic='Тест/Ошибка')
+        total_trades = trades_qs.count()
+
+        if total_trades == 0:
+            return Response({
+                "message": "Нет сделок",
+                "overview": {
+                    "inbox_count": inbox_count, "journal_count": 0, "total_trades": 0,
+                    "winrate_percent": 0, "total_pnl": 0, "avg_win": 0, "avg_loss": 0,
+                    "rr_ratio": 0, "max_win_streak": 0, "max_loss_streak": 0
+                }
+            })
+
+        winning_trades = trades_qs.filter(profit__gt=0).count()
+        losing_trades = trades_qs.filter(profit__lt=0).count()
+        winrate = (winning_trades / total_trades) * 100
+        total_profit = trades_qs.aggregate(Sum('profit'))['profit__sum'] or 0
+
+        trades_list = list(trades_qs.order_by('time'))
+        wins = [t.profit for t in trades_list if t.profit > 0]
+        losses = [t.profit for t in trades_list if t.profit < 0]
+        avg_win = sum(wins) / len(wins) if wins else 0
+        avg_loss = sum(losses) / len(losses) if losses else 0
+        rr_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+        max_win_streak = max_loss_streak = curr_streak = 0
+        curr_type = None;
+        hourly_pnl = {i: 0 for i in range(24)}
+
+        for t in trades_list:
+            if t.profit > 0:
+                if curr_type == 'win':
+                    curr_streak += 1
+                else:
+                    curr_type = 'win'; curr_streak = 1
+                max_win_streak = max(max_win_streak, curr_streak)
+            elif t.profit < 0:
+                if curr_type == 'loss':
+                    curr_streak += 1
+                else:
+                    curr_type = 'loss'; curr_streak = 1
+                max_loss_streak = max(max_loss_streak, curr_streak)
+            if t.time:
+                shifted_time = t.time + timedelta(hours=tz_offset)
+                hourly_pnl[shifted_time.hour] += t.profit
+
+        setups_data = trades_qs.values('strategy_name').annotate(pnl=Sum('profit')).order_by('-pnl')
+        tf_data = trades_qs.values('timeframe').annotate(pnl=Sum('profit')).order_by('-pnl')
+        hourly_data = [{"hour": f"{k:02d}:00", "pnl": round(v, 2)} for k, v in hourly_pnl.items()]
+        psy_data = trades_qs.values('psychology').annotate(pnl=Sum('profit')).order_by('-pnl')
+        formatted_psy = [{'psychology': p['psychology'] or 'Без метки', 'pnl': round(p['pnl'], 2)} for p in psy_data]
+
+        return Response({
+            "overview": {
+                "inbox_count": inbox_count,  # Отдаем счетчик Входящих
+                "journal_count": total_trades,  # Отдаем счетчик Дневника
+                "total_trades": total_trades, "winrate_percent": round(winrate, 2),
+                "total_pnl": round(total_profit, 2), "avg_win": round(avg_win, 2),
+                "avg_loss": round(avg_loss, 2), "rr_ratio": round(rr_ratio, 2),
+                "max_win_streak": max_win_streak, "max_loss_streak": max_loss_streak
+            },
+            "by_setup": list(setups_data), "by_timeframe": list(tf_data),
+            "by_hour": hourly_data, "by_psychology": formatted_psy
+        })
+
+    @action(detail=True, methods=['post'])
+    def add_analysis_screen(self, request, pk=None):
+        trade = self.get_object()
+        timeframe = request.data.get('timeframe', 'M1')
+        description = request.data.get('description', '')
+
+        image = request.FILES.get('image')
+        image_url = request.data.get('image_url')
+
+        # Если прислали ссылку, притворяемся браузером Chrome и качаем
+        if image_url and not image:
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+                }
+                resp = requests.get(image_url.strip(), headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    image = ContentFile(resp.content, name=f"tv_my_{trade.ticket}_{timeframe}.png")
+                else:
+                    return Response({
+                                        "error": f"TradingView заблокировал скачивание (Код: {resp.status_code}). Попробуй вставить скриншот через Ctrl+V."},
+                                    status=400)
+            except Exception as e:
+                return Response({"error": f"Ошибка соединения с TradingView: {str(e)}"}, status=400)
+
+        if not image:
+            return Response({"error": "Нужен скриншот или рабочая ссылка!"}, status=400)
+
+        TradeScreenshot.objects.create(
+            trade=trade, timeframe=timeframe, description=description, image=image
+        )
+        return Response({"message": "Твой анализ добавлен!"})
+
+    @action(detail=True, methods=['post'])
+    def add_mentor_review(self, request, pk=None):
+        trade = self.get_object()
+        error_type = request.data.get('error_type', 'LOGIC_FAIL')
+        mentor_comment = request.data.get('mentor_comment', '')
+        timeframe = request.data.get('timeframe', 'Общее')
+
+        image = request.FILES.get('image')
+        image_url = request.data.get('image_url')
+
+        # Аналогично для разбора RS
+        if image_url and not image:
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+                }
+                resp = requests.get(image_url.strip(), headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    image = ContentFile(resp.content, name=f"tv_rs_{trade.ticket}.png")
+                else:
+                    return Response({"error": f"TradingView заблокировал скачивание (Код: {resp.status_code})."},
+                                    status=400)
+            except Exception as e:
+                return Response({"error": f"Ошибка соединения с TradingView: {str(e)}"}, status=400)
+
+        last_step = trade.mentor_reviews.order_by('-step_order').first()
+        next_order = (last_step.step_order + 1) if last_step else 1
+
+        ReviewStep.objects.create(
+            trade=trade, step_order=next_order, error_type=error_type,
+            mentor_comment=mentor_comment, image=image, timeframe=timeframe
+        )
+        return Response({"message": "Вердикт RS добавлен!"})
+
+    @action(detail=False, methods=['delete'])
+    def delete_feed_item(self, request):
+        item_type = request.query_params.get('type')
+        item_id = request.query_params.get('id')
+        if item_type == 'my':
+            TradeScreenshot.objects.filter(id=item_id, trade__user=request.user).delete()
+        elif item_type == 'rs':
+            ReviewStep.objects.filter(id=item_id, trade__user=request.user).delete()
+        return Response({"message": "Успешно удалено!"})
+
+    @action(detail=False, methods=['post'])
+    def add_manual(self, request):
+        data = request.data
+
+        # Если тикет не указан, генерируем случайный (чтобы не было конфликтов с MT5)
+        ticket = data.get('ticket')
+        if not ticket:
+            import random
+            ticket = f"RS_{random.randint(100000, 999999)}"
+
+        time_str = data.get('time')
+        if time_str:
+            try:
+                # Парсим время из HTML-формы
+                trade_time = datetime.fromisoformat(time_str)
+            except ValueError:
+                from django.utils import timezone
+                trade_time = timezone.now()
+        else:
+            from django.utils import timezone
+            trade_time = timezone.now()
+
+        try:
+            trade = Trade.objects.create(
+                user=request.user,
+                ticket=ticket,
+                symbol=data.get('symbol', 'XAUUSD').upper(),
+                type=data.get('type', 'BUY'),
+                volume=float(data.get('volume', 0.01)),
+                entry_price=0.0,  # Для чужих сделок точная цена входа нам не так важна
+                profit=float(data.get('profit', 0.0)),
+                time=trade_time,
+                strategy_name="Разбор чужой сделки",
+                is_processed=False  # Кидаем во Входящие!
+            )
+            return Response({"message": "Чужая сделка добавлена!", "id": trade.id}, status=201)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def mt5_webhook(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = authenticate(username=username, password=password)
+
+    if not user: return Response({"error": "Неверный логин или пароль MT5"}, status=401)
+
+    ticket = request.data.get('ticket')
+    symbol = request.data.get('symbol')
+    trade_type = request.data.get('type')
+    volume = request.data.get('volume')
+    entry_price = request.data.get('entry_price')
+    profit = request.data.get('profit')
+    time_str = request.data.get('time')
+    broker_offset_seconds = request.data.get('broker_offset', 10800)
+
+    # Достаем все 5 картинок из запроса
+    screenshot_exit = request.data.get('screenshot_exit')
+    screen_m1 = request.data.get('auto_screen_m1')
+    screen_m5 = request.data.get('auto_screen_m5')
+    screen_m15 = request.data.get('auto_screen_m15')
+    screen_h1 = request.data.get('auto_screen_h1')
+    screen_h4 = request.data.get('auto_screen_h4')  # НОВОЕ
+    screen_d1 = request.data.get('auto_screen_d1')  # НОВОЕ
+
+    if ticket is None or symbol is None or trade_type is None or volume is None or entry_price is None or profit is None or time_str is None:
+        return Response({"error": "Неполные данные от MT5"}, status=400)
+
+    if Trade.objects.filter(ticket=ticket, user=user).exists():
+        return Response({"message": "Сделка уже есть в базе"}, status=200)
+
+    try:
+        naive_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+        utc_time = naive_time - timedelta(seconds=int(broker_offset_seconds))
+        utc_time = utc_time.replace(tzinfo=pytz.UTC)
+
+        trade = Trade.objects.create(
+            user=user, ticket=ticket, symbol=symbol, type=trade_type,
+            volume=float(volume), entry_price=float(entry_price), profit=float(profit),
+            time=utc_time, strategy_name="Новая из MT5", is_processed=False
+        )
+
+        # Вспомогательная функция для сохранения base64 картинок
+        def save_b64_image(b64_str, field, filename):
+            if b64_str:
+                try:
+                    img_data = base64.b64decode(b64_str)
+                    field.save(filename, ContentFile(img_data), save=False)
+                except Exception as e:
+                    print(f"Ошибка сохранения {filename}: {e}")
+
+        # Сохраняем все картинки
+        save_b64_image(screenshot_exit, trade.screenshot_exit, f"exit_{ticket}.png")
+        save_b64_image(screen_m1, trade.auto_screen_m1, f"m1_{ticket}.png")
+        save_b64_image(screen_m5, trade.auto_screen_m5, f"m5_{ticket}.png")
+        save_b64_image(screen_m15, trade.auto_screen_m15, f"m15_{ticket}.png")
+        save_b64_image(screen_h1, trade.auto_screen_h1, f"h1_{ticket}.png")
+        save_b64_image(screen_h4, trade.auto_screen_h4, f"h4_{ticket}.png")  # НОВОЕ
+        save_b64_image(screen_d1, trade.auto_screen_d1, f"d1_{ticket}.png")  # НОВОЕ
+
+        trade.save() # Записываем все изменения в БД
+
+        return Response({"message": "Сделка и скриншоты успешно загружены!"}, status=201)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
