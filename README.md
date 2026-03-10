@@ -1,10 +1,3 @@
-А, точно! Я в прошлом сообщении дал тебе только кусок с новыми фичами, и из-за этого потерялась вся пошаговая инструкция по установке. Извини за это!
-
-Кстати, раз мы уже сделали Аналитику и Плейбук, я в разделе Roadmap (Планы) отметил их галочками [x] как выполненные. Это покажет всем на GitHub, что проект активно развивается!
-
-Вот полный, финальный и объединенный файл README.md. Скопируй его целиком от первой до последней строчки, в нем идеальное форматирование со всеми блоками кода:
-
-Markdown
 # 📈 Quantum Trade Journal: MT5 Auto-Sync & ICT Analytics
 
 A powerful, locally-hosted, and fully automated trading journal built with **Django** and **MQL5**. Designed specifically for traders utilizing Smart Money Concepts (SMC) and ICT methodologies.
