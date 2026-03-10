@@ -1,3 +1,10 @@
+А, точно! Я в прошлом сообщении дал тебе только кусок с новыми фичами, и из-за этого потерялась вся пошаговая инструкция по установке. Извини за это!
+
+Кстати, раз мы уже сделали Аналитику и Плейбук, я в разделе Roadmap (Планы) отметил их галочками [x] как выполненные. Это покажет всем на GitHub, что проект активно развивается!
+
+Вот полный, финальный и объединенный файл README.md. Скопируй его целиком от первой до последней строчки, в нем идеальное форматирование со всеми блоками кода:
+
+Markdown
 # 📈 Quantum Trade Journal: MT5 Auto-Sync & ICT Analytics
 
 A powerful, locally-hosted, and fully automated trading journal built with **Django** and **MQL5**. Designed specifically for traders utilizing Smart Money Concepts (SMC) and ICT methodologies.
@@ -6,15 +13,39 @@ Stop logging trades manually. Simply close your position in MetaTrader 5, and th
 
 ![Trade Journal Dashboard Screenshot](LINK_TO_YOUR_IMAGE_HERE)
 
-## 🔥 Key Features
-* **Absolute Automation (MQL5 Webhook):** Upon closing a trade, the EA seamlessly navigates through required timeframes in the background, takes screenshots, converts them to Base64, and sends them to the Django backend.
-* **Mass Tagging (Inbox):** Quickly assign macro-context tags (Trend, Entry Logic, Psychology) to dozens of trades with just a few clicks before sending them to the main journal.
-* **Quantum Review (Mentor Mode):** A dedicated interface for deep trade analysis. Compare your initial expectations side-by-side with a mentor's review (RS) across every timeframe.
-* **ICT Confluence Factors:** Built-in support for tagging SMC/ICT concepts such as FVG, Order Blocks (OB), Liquidity Sweeps, MSS, and Breaker Blocks.
+## 🚀 What's Inside Quantum Trade Journal (v1.0)
+
+We built the ultimate all-in-one platform from scratch for traders utilizing Smart Money Concepts (SMC / ICT). The platform covers 100% of your needs: from automated data collection to deep psychological analysis and prop-firm account management.
+
+### 📊 1. Advanced Analytics & Prop-Tracker
+Your statistics don't lie anymore. The Django backend intelligently distinguishes real trades from tests or mentor reviews.
+* **Prop-Tracker:** Built-in tracker for passing challenges (FTMO, FundedNext, etc.). Automatically calculates Daily Drawdown, High Water Mark (Maximum Drawdown), and Profit Target.
+* **Smart Math:** Calculates Winrate, Risk/Reward (R:R), as well as Maximum Win and Loss Streaks.
+* **Heatmap:** A 30-day profitability calendar.
+* **Performance Slices:** PnL charts by Entry Logic (Trend / Reversal), time of day (Asia, London, NY AM/PM sessions), and timeframes.
+
+### 👽 2. Quantum Review (Mentor Mode)
+You don't have to blow your account to learn.
+* **Adding 3rd-Party Trades:** You can log a trade from your mentor or colleague to the database in two clicks. The backend automatically assigns it zero volume and zero PnL so it **does not ruin your personal performance stats**.
+* **Side-by-Side Comparison:** In the review card, you can load your screenshots on the left and the mentor's screenshots (with comments and mistakes pointed out) on the right. Compare your logic step-by-step across all timeframes (D1, H4, H1, M15, M5, M1).
+* **Smart Dropzone:** Paste screenshots directly from the clipboard (`Ctrl+V`) or via TradingView links.
+
+### 📘 3. Setup Matrix (ICT Playbook)
+The golden collection of your A+ setups, divided into 4 battle quadrants.
+* **Long + Trend:** Trading within a bullish Order Flow (Discount zones).
+* **Long + Reversal:** Catching the bottom via manipulation and Market Structure Shift (MSS).
+* **Short + Trend:** Trading within a bearish Order Flow (Premium zones).
+* **Short + Reversal:** Catching the top via manipulation and MSS.
+* Before taking a trade, simply open the Playbook and compare the current live chart with your ideal templates.
+
+### 🤖 4. Seamless MetaTrader 5 Integration
+No more manual logging.
+* **Auto-Screenshots:** Upon closing a trade, the custom MQL5 Expert Advisor (EA) seamlessly opens clean charts on 6 timeframes in the background, takes screenshots, captures a macro-zoom of the exit moment, and sends the entire package to your local server.
+* **Instant Inbox:** Trades instantly land in your Inbox, where you can bulk-tag the macro-context (Trend, Logic, Psychology) before sending them to the main Journal.
 
 ## 🛠 Tech Stack
 * **Backend:** Python, Django, Django REST Framework.
-* **Frontend:** HTML, Bootstrap 5, JavaScript (Fetch API).
+* **Frontend:** HTML, Bootstrap 5, JavaScript, Chart.js.
 * **MetaTrader Integration:** MQL5 (Expert Advisor), MetaTrader5 Python Package.
 * **Database:** SQLite (default, ready for PostgreSQL migration).
 
@@ -75,18 +106,16 @@ Run the script:
 
 Bash
 python scripts/mt5_sync.py
-
-
 🗺 Roadmap
+[x] Advanced Analytics Dashboard (Equity curve, Win Rate, R/R tracking, Tag performance).
+
+[x] Playbook functionality to store A+ setup templates.
+
 [ ] Migrate from SQLite to PostgreSQL for better scalability.
 
 [ ] Dockerize the application (docker-compose) for one-click deployment.
 
 [ ] AWS S3 / Cloud storage integration for handling gigabytes of screenshots.
-
-[ ] Advanced Analytics Dashboard (Equity curve, Win Rate, R/R tracking, Tag performance).
-
-[ ] Playbook functionality to store A+ setup templates.
 
 🤝 Contributing
 Pull requests are welcome! If you have ideas for improving the UI, optimizing the MQL5 EA, or adding new ICT concepts, feel free to open an Issue or submit a PR.

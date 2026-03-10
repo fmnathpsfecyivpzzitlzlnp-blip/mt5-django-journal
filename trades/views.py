@@ -15,7 +15,8 @@ import pytz
 import base64
 from .serializers import TradeSerializer # <--- ДОБАВИТЬ ЭТУ СТРОКУ
 import random
-
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncDate
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
 
@@ -37,14 +38,33 @@ class PlaybookSerializer(serializers.ModelSerializer):
     class Meta: model = PlaybookPattern; fields = '__all__'
 
 
-class PlaybookViewSet(viewsets.ModelViewSet):
-    serializer_class = PlaybookSerializer
-    permission_classes = [permissions.IsAuthenticated]
+class PlaybookViewSet(viewsets.ViewSet):
+    def list(self, request):
+        patterns = PlaybookPattern.objects.filter(user=request.user).order_by('-created_at')
+        data = [{
+            "id": p.id,
+            "title": p.title,
+            "description": p.description,
+            "market_trend": p.market_trend,
+            "entry_logic": p.entry_logic,
+            "image_url": p.ideal_screenshot.url if p.ideal_screenshot else ""
+        } for p in patterns]
+        return Response(data)
 
-    def get_queryset(self): return PlaybookPattern.objects.filter(user=self.request.user).order_by('-created_at')
+    def create(self, request):
+        p = PlaybookPattern.objects.create(
+            user=request.user,
+            title=request.data.get('title'),
+            description=request.data.get('description'),
+            market_trend=request.data.get('market_trend'),
+            entry_logic=request.data.get('entry_logic'),
+            ideal_screenshot=request.FILES.get('image') # Забираем файл картинки
+        )
+        return Response({"message": "Сетап добавлен в Playbook!", "id": p.id}, status=201)
 
-    def perform_create(self, serializer): serializer.save(user=self.request.user)
-
+    def destroy(self, request, pk=None):
+        PlaybookPattern.objects.filter(id=pk, user=request.user).delete()
+        return Response({"message": "Удалено из Playbook"}, status=204)
 
 class TradeViewSet(viewsets.ModelViewSet):
     serializer_class = TradeSerializer
@@ -133,6 +153,7 @@ class TradeViewSet(viewsets.ModelViewSet):
         return Response({"message": f"Успешно обработано {trades.count()} сделок!"})
 
     @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'])
     def stats(self, request):
         try:
             tz_offset = int(request.query_params.get('tz_offset', 0))
@@ -141,7 +162,11 @@ class TradeViewSet(viewsets.ModelViewSet):
 
         # 📊 НОВАЯ ЛОГИКА: Считаем сделки для меню
         inbox_count = Trade.objects.filter(user=self.request.user, is_processed=False).count()
-        trades_qs = Trade.objects.filter(user=self.request.user, is_processed=True).exclude(entry_logic='Тест/Ошибка')
+
+        # 👇 ИСКЛЮЧАЕМ И ТЕСТЫ, И ЧУЖИЕ СДЕЛКИ ИЗ ВСЕХ РАСЧЕТОВ 👇
+        trades_qs = Trade.objects.filter(user=self.request.user, is_processed=True).exclude(
+            entry_logic__in=['Тест/Ошибка', 'Чужая сделка'])
+
         total_trades = trades_qs.count()
 
         if total_trades == 0:
@@ -151,7 +176,10 @@ class TradeViewSet(viewsets.ModelViewSet):
                     "inbox_count": inbox_count, "journal_count": 0, "total_trades": 0,
                     "winrate_percent": 0, "total_pnl": 0, "avg_win": 0, "avg_loss": 0,
                     "rr_ratio": 0, "max_win_streak": 0, "max_loss_streak": 0
-                }
+                },
+                # Пустые заглушки, чтобы фронтенд не ломался
+                "by_setup": [], "by_timeframe": [], "by_hour": [], "by_psychology": [],
+                "chart_data": {"dates": [], "equity": []}, "logic_stats": []
             })
 
         winning_trades = trades_qs.filter(profit__gt=0).count()
@@ -167,21 +195,36 @@ class TradeViewSet(viewsets.ModelViewSet):
         rr_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
 
         max_win_streak = max_loss_streak = curr_streak = 0
-        curr_type = None;
+        curr_type = None
         hourly_pnl = {i: 0 for i in range(24)}
+
+        # 👇 ДОБАВЛЕНО ДЛЯ НОВОГО ГРАФИКА ЭКВИТИ 👇
+        daily_pnl = trades_qs.annotate(date=TruncDate('time')).values('date').annotate(
+            daily_profit=Sum('profit')).order_by('date')
+        dates = []
+        equity_curve = []
+        current_equity = 0
+        for day in daily_pnl:
+            if day['date']:
+                dates.append(day['date'].strftime('%Y-%m-%d'))
+                current_equity += day['daily_profit']
+                equity_curve.append(round(current_equity, 2))
+        # 👆 КОНЕЦ ВСТАВКИ ДЛЯ ЭКВИТИ 👆
 
         for t in trades_list:
             if t.profit > 0:
                 if curr_type == 'win':
                     curr_streak += 1
                 else:
-                    curr_type = 'win'; curr_streak = 1
+                    curr_type = 'win';
+                    curr_streak = 1
                 max_win_streak = max(max_win_streak, curr_streak)
             elif t.profit < 0:
                 if curr_type == 'loss':
                     curr_streak += 1
                 else:
-                    curr_type = 'loss'; curr_streak = 1
+                    curr_type = 'loss';
+                    curr_streak = 1
                 max_loss_streak = max(max_loss_streak, curr_streak)
             if t.time:
                 shifted_time = t.time + timedelta(hours=tz_offset)
@@ -193,17 +236,36 @@ class TradeViewSet(viewsets.ModelViewSet):
         psy_data = trades_qs.values('psychology').annotate(pnl=Sum('profit')).order_by('-pnl')
         formatted_psy = [{'psychology': p['psychology'] or 'Без метки', 'pnl': round(p['pnl'], 2)} for p in psy_data]
 
+        # 👇 ДОБАВЛЕНО ДЛЯ ГРАФИКА ЛОГИКИ ВХОДА 👇
+        logic_data = trades_qs.values('entry_logic').annotate(count=Count('id'), pnl=Sum('profit')).order_by('-pnl')
+        formatted_logic = [
+            {'entry_logic': l['entry_logic'] or 'Без логики', 'count': l['count'], 'total_profit': round(l['pnl'], 2)}
+            for l in logic_data]
+
         return Response({
             "overview": {
-                "inbox_count": inbox_count,  # Отдаем счетчик Входящих
-                "journal_count": total_trades,  # Отдаем счетчик Дневника
-                "total_trades": total_trades, "winrate_percent": round(winrate, 2),
-                "total_pnl": round(total_profit, 2), "avg_win": round(avg_win, 2),
-                "avg_loss": round(avg_loss, 2), "rr_ratio": round(rr_ratio, 2),
-                "max_win_streak": max_win_streak, "max_loss_streak": max_loss_streak
+                "inbox_count": inbox_count,
+                "journal_count": total_trades,
+                "total_trades": total_trades,
+                "winrate_percent": round(winrate, 2),  # Оставил твое название ключа
+                "total_pnl": round(total_profit, 2),
+                "avg_win": round(avg_win, 2),
+                "avg_loss": round(avg_loss, 2),
+                "rr_ratio": round(rr_ratio, 2),
+                "max_win_streak": max_win_streak,
+                "max_loss_streak": max_loss_streak
             },
-            "by_setup": list(setups_data), "by_timeframe": list(tf_data),
-            "by_hour": hourly_data, "by_psychology": formatted_psy
+            "by_setup": list(setups_data),
+            "by_timeframe": list(tf_data),
+            "by_hour": hourly_data,
+            "by_psychology": formatted_psy,
+
+            # 👇 НОВЫЕ БЛОКИ ДЛЯ CHART.JS 👇
+            "chart_data": {
+                "dates": dates,
+                "equity": equity_curve
+            },
+            "logic_stats": formatted_logic
         })
 
     @action(detail=True, methods=['post'])
@@ -289,22 +351,24 @@ class TradeViewSet(viewsets.ModelViewSet):
     def add_manual(self, request):
         data = request.data
 
-        # Если тикет не указан, генерируем случайный (чтобы не было конфликтов с MT5)
-        ticket = data.get('ticket')
-        if not ticket:
-            import random
-            ticket = f"RS_{random.randint(100000, 999999)}"
+        # Забираем автора из формы
+        author = data.get('author', 'RS').strip()
+        date_str = data.get('date')
 
-        time_str = data.get('time')
-        if time_str:
+        import random
+        # Генерируем красивый именной тикет (напр: Регина_1482)
+        ticket = f"{author}_{random.randint(1000, 9999)}"
+
+        from django.utils import timezone
+        from datetime import datetime
+
+        if date_str:
             try:
-                # Парсим время из HTML-формы
-                trade_time = datetime.fromisoformat(time_str)
+                # Нам не нужно точное время, ставим просто 12:00 указанного дня
+                trade_time = timezone.make_aware(datetime.strptime(f"{date_str} 12:00:00", "%Y-%m-%d %H:%M:%S"))
             except ValueError:
-                from django.utils import timezone
                 trade_time = timezone.now()
         else:
-            from django.utils import timezone
             trade_time = timezone.now()
 
         try:
@@ -312,13 +376,14 @@ class TradeViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 ticket=ticket,
                 symbol=data.get('symbol', 'XAUUSD').upper(),
-                type=data.get('type', 'BUY'),
-                volume=float(data.get('volume', 0.01)),
-                entry_price=0.0,  # Для чужих сделок точная цена входа нам не так важна
-                profit=float(data.get('profit', 0.0)),
+                type=data.get('type', 'SELL'),
+                volume=0.0,  # 👈 Жестко 0
+                entry_price=0.0,
+                profit=0.0,  # 👈 Жестко 0, чтобы не портить статистику!
                 time=trade_time,
                 strategy_name="Разбор чужой сделки",
-                is_processed=False  # Кидаем во Входящие!
+                entry_logic="Чужая сделка",  # 👈 Помечаем, чтобы скрыть из графиков
+                is_processed=False  # Во Входящие
             )
             return Response({"message": "Чужая сделка добавлена!", "id": trade.id}, status=201)
         except Exception as e:

@@ -6,6 +6,33 @@
     <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#propSettings">⚙️ Настройки Счета</button>
 </div>
 
+<div class="row mb-4 g-2">
+    <div class="col-md-3">
+        <div class="card bg-dark border-secondary p-2 text-center shadow-sm">
+            <small class="text-secondary">Winrate</small>
+            <h5 class="text-info mb-0" id="stat-winrate">0%</h5>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-dark border-secondary p-2 text-center shadow-sm">
+            <small class="text-secondary">Risk / Reward (R:R)</small>
+            <h5 class="text-light mb-0" id="stat-rr">1 : 0</h5>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-dark border-secondary p-2 text-center shadow-sm">
+            <small class="text-secondary">Макс. серия побед</small>
+            <h5 class="text-success mb-0" id="stat-win-streak">0</h5>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-dark border-secondary p-2 text-center shadow-sm">
+            <small class="text-secondary">Макс. серия убытков</small>
+            <h5 class="text-danger mb-0" id="stat-loss-streak">0</h5>
+        </div>
+    </div>
+</div>
+
 <div class="collapse mb-4" id="propSettings">
     <div class="card shadow p-3 border-info">
         <h6 class="text-info mb-3">Параметры челленджа (FTMO / FundedNext и др.)</h6>
@@ -73,7 +100,7 @@
 
 <div class="row">
     <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Психология</h6><canvas id="psyChart"></canvas></div></div>
-    <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Сетапы</h6><canvas id="setupChart"></canvas></div></div>
+    <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Логика Входа</h6><canvas id="logicChart"></canvas></div></div>
     <div class="col-md-4 mb-4"><div class="card p-3 h-100"><h6 class="text-center text-secondary">Таймфреймы</h6><canvas id="tfChart"></canvas></div></div>
 
     <div class="col-12 mb-4">
@@ -93,9 +120,14 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    let setupChartInstance, tfChartInstance, sessionChartInstance, psyChartInstance, equityChartInstance;
+    let logicChartInstance, tfChartInstance, sessionChartInstance, psyChartInstance, equityChartInstance;
     let allTrades = [];
+
+    // Настройки для графиков под темную тему
+    Chart.defaults.color = '#adb5bd';
+    Chart.defaults.borderColor = '#444';
 
     async function initPage() {
         // Загружаем настройки пропа
@@ -106,14 +138,26 @@
 
         const tzOffset = localStorage.getItem('user_tz_offset') || "+3";
 
-        // Грузим стату
+        // Грузим стату с бэкенда
         const statsRes = await fetch(API_BASE + `trades/stats/?tz_offset=${tzOffset}`);
         const statsData = await statsRes.json();
+
+        // Заполняем быстрые карточки метрик
+        if (statsData.overview) {
+            document.getElementById('stat-winrate').innerText = `${statsData.overview.winrate_percent}%`;
+            document.getElementById('stat-rr').innerText = `1 : ${statsData.overview.rr_ratio}`;
+            document.getElementById('stat-win-streak').innerText = statsData.overview.max_win_streak;
+            document.getElementById('stat-loss-streak').innerText = statsData.overview.max_loss_streak;
+        }
+
         renderCharts(statsData);
 
         // Грузим все сделки для Equity и Heatmap
         const tradesRes = await fetch(API_BASE + 'trades/?is_processed=true');
-        allTrades = await tradesRes.json();
+        const rawTrades = await tradesRes.json();
+
+        // 👇 ВАЖНО: Фильтруем сделки, убирая тесты и чужие разборы 👇
+        allTrades = rawTrades.filter(t => t.entry_logic !== 'Тест/Ошибка' && t.entry_logic !== 'Чужая сделка');
 
         // Сортируем сделки от старых к новым для правильного графика
         allTrades.sort((a, b) => new Date(a.time) - new Date(b.time));
@@ -240,19 +284,21 @@
         for(let i=29; i>=0; i--) {
             let d = new Date(); d.setDate(d.getDate() - i); let ds = d.toISOString().split('T')[0]; let p = daily[ds] || 0;
             let c = p > 0 ? `rgba(0, 230, 118, ${Math.min(0.2+p/1500, 1)})` : (p < 0 ? `rgba(255, 82, 82, ${Math.min(0.2+Math.abs(p)/1500, 1)})` : '#333');
-            html += `<div class="heatmap-box" title="${ds} | $${p.toFixed(2)}" style="background-color: ${c}"></div>`;
+            html += `<div class="heatmap-box" title="${ds} | $${p.toFixed(2)}" style="background-color: ${c}; width: 25px; height: 25px; border-radius: 4px;"></div>`;
         }
         document.getElementById('heatmap-container').innerHTML = html;
     }
 
     function renderCharts(data) {
-        if(setupChartInstance) setupChartInstance.destroy();
+        if(logicChartInstance) logicChartInstance.destroy();
         if(tfChartInstance) tfChartInstance.destroy();
         if(sessionChartInstance) sessionChartInstance.destroy();
         if(psyChartInstance) psyChartInstance.destroy();
 
-        if(data.by_setup) setupChartInstance = new Chart(document.getElementById('setupChart'), { type: 'bar', data: { labels: data.by_setup.map(s => s.strategy_name||'N/A'), datasets: [{ label: 'PnL', data: data.by_setup.map(s => s.pnl), backgroundColor: data.by_setup.map(s => s.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
-        if(data.by_timeframe) tfChartInstance = new Chart(document.getElementById('tfChart'), { type: 'bar', data: { labels: data.by_timeframe.map(t => t.timeframe||'N/A'), datasets: [{ label: 'PnL', data: data.by_timeframe.map(t => t.pnl), backgroundColor: data.by_timeframe.map(t => t.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+        // Заменили setup на logic_stats
+        if(data.logic_stats) logicChartInstance = new Chart(document.getElementById('logicChart'), { type: 'bar', data: { labels: data.logic_stats.map(s => s.entry_logic||'N/A'), datasets: [{ label: 'PnL ($)', data: data.logic_stats.map(s => s.total_profit), backgroundColor: data.logic_stats.map(s => s.total_profit >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
+
+        if(data.by_timeframe) tfChartInstance = new Chart(document.getElementById('tfChart'), { type: 'bar', data: { labels: data.by_timeframe.map(t => t.timeframe||'N/A'), datasets: [{ label: 'PnL ($)', data: data.by_timeframe.map(t => t.pnl), backgroundColor: data.by_timeframe.map(t => t.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
         if(data.by_hour) sessionChartInstance = new Chart(document.getElementById('sessionChart'), { type: 'bar', data: { labels: data.by_hour.map(h => h.hour), datasets: [{ label: 'PnL ($)', data: data.by_hour.map(h => h.pnl), backgroundColor: data.by_hour.map(h => h.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } }, x: { grid: { display: false } } } } });
         if(data.by_psychology) psyChartInstance = new Chart(document.getElementById('psyChart'), { type: 'bar', data: { labels: data.by_psychology.map(p => p.psychology), datasets: [{ label: 'PnL ($)', data: data.by_psychology.map(p => p.pnl), backgroundColor: data.by_psychology.map(p => p.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
     }

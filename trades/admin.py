@@ -18,5 +18,6 @@ class TradeAdmin(admin.ModelAdmin):
 # НОВОЕ: Регистрируем Playbook, чтобы он появился в админке
 @admin.register(PlaybookPattern)
 class PlaybookPatternAdmin(admin.ModelAdmin):
-    list_display = ('title', 'setup_name', 'timeframe', 'created_at')
-    list_filter = ('setup_name', 'timeframe')
+    # 👇 Заменили старые поля на новые 👇
+    list_display = ('title', 'market_trend', 'entry_logic', 'created_at')
+    list_filter = ('market_trend', 'entry_logic')

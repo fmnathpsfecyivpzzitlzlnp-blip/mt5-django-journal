@@ -10,16 +10,20 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark border-warning">
             <div class="modal-header border-secondary bg-black">
-                <h5 class="modal-title text-warning">👽 Добавить чужую сделку на разбор</h5>
+                <h5 class="modal-title text-warning">👽 Добавить сделку на разбор</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="row g-3">
                     <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Автор (Чья сделка?)</label>
+                        <input type="text" id="man-author" class="form-control bg-dark text-light border-secondary" placeholder="Напр: Регина, RS..." value="Регина">
+                    </div>
+                    <div class="col-md-6">
                         <label class="small text-secondary mb-1">Направление</label>
                         <select id="man-type" class="form-select bg-dark text-light border-secondary">
-                            <option value="BUY">🟢 BUY (Лонг)</option>
                             <option value="SELL">🔴 SELL (Шорт)</option>
+                            <option value="BUY">🟢 BUY (Лонг)</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -27,25 +31,16 @@
                         <input type="text" id="man-symbol" class="form-control bg-dark text-light border-secondary" value="XAUUSD">
                     </div>
                     <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Объем (Лот)</label>
-                        <input type="number" id="man-vol" class="form-control bg-dark text-light border-secondary" step="0.01" value="1.00">
+                        <label class="small text-secondary mb-1">Дата</label>
+                        <input type="date" id="man-date" class="form-control bg-dark text-light border-secondary">
                     </div>
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">PnL ($)</label>
-                        <input type="number" id="man-pnl" class="form-control bg-dark text-light border-secondary" step="0.01" placeholder="Напр: 500 или -200">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Время закрытия</label>
-                        <input type="datetime-local" id="man-time" class="form-control bg-dark text-light border-secondary">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Тикет (необязательно)</label>
-                        <input type="text" id="man-ticket" class="form-control bg-dark text-light border-secondary" placeholder="Оставь пустым для авто">
-                    </div>
+                </div>
+                <div class="mt-4 alert alert-dark border-secondary small text-muted p-2">
+                    ℹ️ <b>Объем и PnL будут равны 0.</b> Эти сделки не испортят твою личную статистику доходности. Ссылки на TradingView и логику добавишь уже внутри разбора.
                 </div>
             </div>
             <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-warning w-100 fw-bold" onclick="submitManualTrade()">Создать сделку</button>
+                <button type="button" class="btn btn-warning w-100 fw-bold" onclick="submitManualTrade()">Создать карточку</button>
             </div>
         </div>
     </div>
@@ -70,6 +65,7 @@
                 <option value="По тренду">✅ По тренду</option>
                 <option value="Разворот">🔄 Разворот</option>
                 <option value="Тест/Ошибка">🔧 Техническая (Тест/Сбой)</option>
+                <option value="Чужая сделка">👽 Чужая сделка</option>
             </select>
         </div>
         <div class="col-md-3">
@@ -286,17 +282,13 @@
 
     async function submitManualTrade() {
         const payload = {
+            author: document.getElementById('man-author').value || 'Unknown',
             type: document.getElementById('man-type').value,
             symbol: document.getElementById('man-symbol').value,
-            volume: document.getElementById('man-vol').value,
-            profit: document.getElementById('man-pnl').value,
-            time: document.getElementById('man-time').value,
-            ticket: document.getElementById('man-ticket').value
+            date: document.getElementById('man-date').value
         };
 
-        if (!payload.profit || !payload.time) {
-            return alert("Укажи PnL и Время сделки!");
-        }
+        if (!payload.date) return alert("Укажи дату сделки!");
 
         const res = await fetch(`${API_BASE}trades/add_manual/`, {
             method: 'POST',
@@ -305,17 +297,14 @@
         });
 
         if (res.ok) {
-            // Закрываем окно и чистим форму
             bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
-            document.getElementById('man-pnl').value = '';
-            document.getElementById('man-time').value = '';
-
-            // Перерисовываем Входящие
+            document.getElementById('man-date').value = '';
             initPage();
         } else {
             const err = await res.json();
             alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
         }
     }
+
 </script>
 {% endblock %}

@@ -77,7 +77,13 @@ class PlaybookPattern(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, null=True)
-    setup_name = models.CharField(max_length=100)
-    timeframe = models.CharField(max_length=10)
+
+    # Наши 4 квадранта
+    market_trend = models.CharField(max_length=50, blank=True, null=True)  # Лонговый / Шортовый
+    entry_logic = models.CharField(max_length=50, blank=True, null=True)  # По тренду / Разворот
+
     ideal_screenshot = models.ImageField(upload_to='playbook/')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.market_trend} | {self.entry_logic} - {self.title}"
