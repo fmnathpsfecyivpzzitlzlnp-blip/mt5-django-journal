@@ -1,0 +1,249 @@
+//+------------------------------------------------------------------+
+//|                                          AutoJournal_Webhook.mq5 |
+//|                     Webhook + Multi-Screenshots + GUI Panel      |
+//+------------------------------------------------------------------+
+#property copyright "SaaS Journal PRO"
+#property link      ""
+#property version   "5.00"
+
+// --- НАСТРОЙКИ СЕРВЕРА ---
+input string InpUsername = "trader1";
+input string InpPassword = "1qaz2wsxZX!@";
+input string InpUrl = "http://127.0.0.1:8000/api/mt5_webhook/";
+
+// --- НАСТРОЙКИ ПАНЕЛИ ---
+input bool ShowGUIPanel = true; // Показывать кнопки на графике?
+input bool Def_M1 = true;       // Отправлять M1 по умолчанию?
+input bool Def_M5 = true;       // Отправлять M5 по умолчанию?
+input bool Def_M15 = true;      // Отправлять M15 по умолчанию?
+input bool Def_H1 = true;       // Отправлять H1 по умолчанию?
+input bool Def_H4 = false;      // Отправлять H4 по умолчанию?
+input bool Def_D1 = false;      // Отправлять D1 по умолчанию?
+
+// Цвета для кнопок
+color ColorActive = clrSeaGreen;
+color ColorInactive = clrDimGray;
+
+//+------------------------------------------------------------------+
+//| Функция инициализации (Рисуем кнопки)                            |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   if(ShowGUIPanel) {
+      CreateButton("AJ_Btn_M1", "M1", 10, 30, Def_M1);
+      CreateButton("AJ_Btn_M5", "M5", 55, 30, Def_M5);
+      CreateButton("AJ_Btn_M15", "M15", 100, 30, Def_M15);
+      CreateButton("AJ_Btn_H1", "H1", 145, 30, Def_H1);
+      CreateButton("AJ_Btn_H4", "H4", 190, 30, Def_H4);
+      CreateButton("AJ_Btn_D1", "D1", 235, 30, Def_D1);
+      ChartRedraw();
+   }
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Функция деинициализации (Убираем кнопки)                         |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   ObjectDelete(0, "AJ_Btn_M1");
+   ObjectDelete(0, "AJ_Btn_M5");
+   ObjectDelete(0, "AJ_Btn_M15");
+   ObjectDelete(0, "AJ_Btn_H1");
+   ObjectDelete(0, "AJ_Btn_H4");
+   ObjectDelete(0, "AJ_Btn_D1");
+   ChartRedraw();
+}
+
+//+------------------------------------------------------------------+
+//| Обработка кликов по кнопкам                                      |
+//+------------------------------------------------------------------+
+void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+{
+   if(id == CHARTEVENT_OBJECT_CLICK) {
+      if(StringFind(sparam, "AJ_Btn_") >= 0) {
+         // Читаем текущее состояние кнопки (нажата/отжата)
+         bool state = (bool)ObjectGetInteger(0, sparam, OBJPROP_STATE);
+         // Меняем цвет в зависимости от состояния
+         ObjectSetInteger(0, sparam, OBJPROP_BGCOLOR, state ? ColorActive : ColorInactive);
+         ChartRedraw();
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Создание кнопки                                                  |
+//+------------------------------------------------------------------+
+void CreateButton(string name, string text, int x, int y, bool state)
+{
+   ObjectCreate(0, name, OBJ_BUTTON, 0, 0, 0);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, 40);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, 25);
+   ObjectSetString(0, name, OBJPROP_TEXT, text);
+   ObjectSetInteger(0, name, OBJPROP_STATE, state); // Залипание
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
+   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, state ? ColorActive : ColorInactive);
+   ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, clrBlack);
+   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 9);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+}
+
+//+------------------------------------------------------------------+
+//| Проверка: нужно ли делать скриншот этого ТФ?                     |
+//+------------------------------------------------------------------+
+bool IsTfActive(string btn_name, bool def_val)
+{
+   if(!ShowGUIPanel) return def_val; // Если панель скрыта, берем из настроек
+   return (bool)ObjectGetInteger(0, btn_name, OBJPROP_STATE);
+}
+
+//+------------------------------------------------------------------+
+//| Скриншотер                                                       |
+//+------------------------------------------------------------------+
+string GetScreenshotFromTF(ulong ticket, string symbol_name, ENUM_TIMEFRAMES tf, string tf_name, bool is_exit) {
+    long chart_id = 0;
+    bool is_opened_by_us = false;
+
+    if (is_exit) {
+        long curr = ChartFirst();
+        while(curr >= 0) {
+            if(ChartSymbol(curr) == symbol_name) {
+                chart_id = curr; break;
+            }
+            curr = ChartNext(curr);
+        }
+    }
+
+    if (chart_id == 0) {
+        chart_id = ChartOpen(symbol_name, tf);
+        is_opened_by_us = true;
+    }
+
+    if (chart_id == 0) return "";
+
+    ChartSetInteger(chart_id, CHART_SHOW_TRADE_LEVELS, true);
+    long old_scale = ChartGetInteger(chart_id, CHART_SCALE);
+
+    if (is_exit) {
+        ChartSetInteger(chart_id, CHART_SCALE, 5);
+        ChartNavigate(chart_id, CHART_END, 0);
+    }
+
+    Sleep(is_opened_by_us ? 1500 : 300);
+    ChartRedraw(chart_id);
+
+    string fileName = IntegerToString(ticket) + "_" + tf_name + ".png";
+    ChartScreenShot(chart_id, fileName, 1280, 720, ALIGN_RIGHT);
+    Sleep(300);
+
+    if (is_exit && !is_opened_by_us) {
+        ChartSetInteger(chart_id, CHART_SCALE, old_scale);
+        ChartRedraw(chart_id);
+    }
+
+    if (is_opened_by_us) ChartClose(chart_id);
+
+    int handle = FileOpen(fileName, FILE_READ|FILE_BIN);
+    if(handle == INVALID_HANDLE) return "";
+
+    uint fileSize = (uint)FileSize(handle);
+    uchar fileData[];
+    ArrayResize(fileData, fileSize);
+    FileReadArray(handle, fileData, 0, fileSize);
+    FileClose(handle);
+
+    uchar base64Data[];
+    uchar key[];
+    CryptEncode(CRYPT_BASE64, fileData, key, base64Data);
+    string base64Str = CharArrayToString(base64Data);
+
+    StringReplace(base64Str, "\r\n", "");
+    FileDelete(fileName);
+
+    return base64Str;
+}
+
+//+------------------------------------------------------------------+
+//| Основная логика: Отправка сделки                                 |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
+     {
+      ulong ticket = trans.deal;
+      if(HistoryDealSelect(ticket))
+        {
+         string symbol = HistoryDealGetString(ticket, DEAL_SYMBOL);
+
+         long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+         if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT)
+           {
+            double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+            double volume = HistoryDealGetDouble(ticket, DEAL_VOLUME);
+            double price = HistoryDealGetDouble(ticket, DEAL_PRICE);
+
+            long dealType = HistoryDealGetInteger(ticket, DEAL_TYPE);
+            string posType = (dealType == DEAL_TYPE_SELL) ? "BUY" : "SELL";
+
+            long timeInt = HistoryDealGetInteger(ticket, DEAL_TIME);
+            MqlDateTime timeStruct;
+            TimeToStruct((datetime)timeInt, timeStruct);
+            string timeStr = StringFormat("%04d-%02d-%02d %02d:%02d:%02d",
+                                          timeStruct.year, timeStruct.mon, timeStruct.day,
+                                          timeStruct.hour, timeStruct.min, timeStruct.sec);
+
+            int broker_offset = (int)(TimeCurrent() - TimeGMT());
+
+            Print("📸 Собираю мультикадровые скриншоты для тикета ", ticket, "...");
+
+            // Скрин выхода делаем ВСЕГДА
+            string b64_exit = GetScreenshotFromTF(ticket, symbol, PERIOD_M1, "EXIT", true);
+
+            // Остальные скрины делаем ТОЛЬКО если кнопка нажата
+            string b64_m1  = IsTfActive("AJ_Btn_M1", Def_M1)   ? GetScreenshotFromTF(ticket, symbol, PERIOD_M1,  "M1", false) : "";
+            string b64_m5  = IsTfActive("AJ_Btn_M5", Def_M5)   ? GetScreenshotFromTF(ticket, symbol, PERIOD_M5,  "M5", false) : "";
+            string b64_m15 = IsTfActive("AJ_Btn_M15", Def_M15) ? GetScreenshotFromTF(ticket, symbol, PERIOD_M15, "M15", false) : "";
+            string b64_h1  = IsTfActive("AJ_Btn_H1", Def_H1)   ? GetScreenshotFromTF(ticket, symbol, PERIOD_H1,  "H1", false) : "";
+            string b64_h4  = IsTfActive("AJ_Btn_H4", Def_H4)   ? GetScreenshotFromTF(ticket, symbol, PERIOD_H4,  "H4", false) : "";
+            string b64_d1  = IsTfActive("AJ_Btn_D1", Def_D1)   ? GetScreenshotFromTF(ticket, symbol, PERIOD_D1,  "D1", false) : "";
+
+            // Пакуем всё в JSON
+            string json = "{";
+            json += "\"username\":\"" + InpUsername + "\",";
+            json += "\"password\":\"" + InpPassword + "\",";
+            json += "\"ticket\":\"" + IntegerToString(ticket) + "\",";
+            json += "\"symbol\":\"" + symbol + "\",";
+            json += "\"type\":\"" + posType + "\",";
+            json += "\"volume\":\"" + DoubleToString(volume, 2) + "\",";
+            json += "\"entry_price\":\"" + DoubleToString(price, 5) + "\",";
+            json += "\"profit\":\"" + DoubleToString(profit, 2) + "\",";
+            json += "\"time\":\"" + timeStr + "\",";
+            json += "\"broker_offset\":\"" + IntegerToString(broker_offset) + "\",";
+
+            json += "\"screenshot_exit\":\"" + b64_exit + "\",";
+            json += "\"auto_screen_m1\":\"" + b64_m1 + "\",";
+            json += "\"auto_screen_m5\":\"" + b64_m5 + "\",";
+            json += "\"auto_screen_m15\":\"" + b64_m15 + "\",";
+            json += "\"auto_screen_h1\":\"" + b64_h1 + "\",";
+            json += "\"auto_screen_h4\":\"" + b64_h4 + "\",";
+            json += "\"auto_screen_d1\":\"" + b64_d1 + "\"";
+            json += "}";
+
+            char data[]; char res[]; string resHeaders;
+            string headers = "Content-Type: application/json\r\n";
+            StringToCharArray(json, data, 0, WHOLE_ARRAY, CP_UTF8);
+            ArrayResize(data, ArraySize(data)-1);
+
+            int req = WebRequest("POST", InpUrl, headers, 15000, data, res, resHeaders);
+
+            if(req == 200 || req == 201) Print("✅ УСПЕШНО! Сделка и выбранные скриншоты отправлены!");
+            else Print("❌ Ошибка API! Код: ", req);
+           }
+        }
+     }
+}
