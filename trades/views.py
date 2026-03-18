@@ -79,22 +79,7 @@ class TradeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=True, methods=['post'])
-    def to_playbook(self, request, pk=None):
-        trade = self.get_object()
-        if not trade.screenshot_exit: return Response({"error": "У сделки нет скриншота!"}, status=400)
-        try:
-            playbook = PlaybookPattern(
-                user=request.user, title=f"Эталон: #{trade.ticket} ({trade.symbol})",
-                description=trade.comment if trade.comment else "Добавлено из дневника",
-                setup_name=trade.strategy_name if trade.strategy_name else "Без сетапа",
-                timeframe=trade.timeframe if trade.timeframe else "Не указан"
-            )
-            playbook.ideal_screenshot.save(f"pb_{trade.ticket}.png", ContentFile(trade.screenshot_exit.read()),
-                                           save=True)
-            return Response({"status": "Успешно добавлено!"})
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
+
 
     @action(detail=False, methods=['post'])
     def upload_history(self, request):

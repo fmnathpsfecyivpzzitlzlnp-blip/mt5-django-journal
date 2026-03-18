@@ -79,8 +79,12 @@ WSGI_APPLICATION = 'journal_back.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'quantum_db',           # Имя базы, которую мы создали
+        'USER': 'postgres',             # Стандартный логин Postgres
+        'PASSWORD': '123',      # 👈 ВПИШИ СЮДА ПАРОЛЬ ОТ СВОЕГО POSTGRESQL
+        'HOST': '127.0.0.1',            # База крутится локально
+        'PORT': '5432',                 # Стандартный порт Postgres
     }
 }
 

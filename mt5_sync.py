@@ -3,7 +3,7 @@ import requests
 from datetime import datetime, timedelta
 
 WEBHOOK_URL = "http://127.0.0.1:8000/api/mt5_webhook/"
-USER_DATA = {'username': 'trader1', 'password': '1qaz2wsxZX!@'}
+USER_DATA = {'username': 'trade1', 'password': '123'}
 
 
 def load_history():
