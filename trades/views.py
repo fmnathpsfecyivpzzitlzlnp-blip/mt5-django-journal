@@ -340,6 +340,9 @@ class TradeViewSet(viewsets.ModelViewSet):
         author = data.get('author', 'RS').strip()
         date_str = data.get('date')
 
+        # 👇 НОВОЕ: Забираем условный профит из формы 👇
+        profit_val = float(data.get('profit', 0.0))
+
         import random
         # Генерируем красивый именной тикет (напр: Регина_1482)
         ticket = f"{author}_{random.randint(1000, 9999)}"
@@ -362,12 +365,12 @@ class TradeViewSet(viewsets.ModelViewSet):
                 ticket=ticket,
                 symbol=data.get('symbol', 'XAUUSD').upper(),
                 type=data.get('type', 'SELL'),
-                volume=0.0,  # 👈 Жестко 0
+                volume=0.0,
                 entry_price=0.0,
-                profit=0.0,  # 👈 Жестко 0, чтобы не портить статистику!
+                profit=profit_val,  # 👈 ТЕПЕРЬ СТАВИМ РЕЗУЛЬТАТ (1 ИЛИ -1) ИЗ ФОРМЫ
                 time=trade_time,
                 strategy_name="Разбор чужой сделки",
-                entry_logic="Чужая сделка",  # 👈 Помечаем, чтобы скрыть из графиков
+                entry_logic="Чужая сделка",  # 👈 Гарантирует, что сделка не попадет в твою стату!
                 is_processed=False  # Во Входящие
             )
             return Response({"message": "Чужая сделка добавлена!", "id": trade.id}, status=201)

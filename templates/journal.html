@@ -20,12 +20,14 @@
         <button class="btn btn-success" onclick="document.getElementById('csv-upload').click()">📥 Импорт (CSV)</button>
     </div>
 </div>
-
 <div class="row mb-3" id="stats-container"></div>
 
 <div class="card shadow mb-4">
     <div class="card-body py-3">
         <div class="row g-2 mb-2">
+            <div class="col-md-2">
+                <input type="date" id="filter-exact-date" class="form-control bg-dark text-light border-secondary" onchange="applyFilters()" title="Поиск по точной дате">
+            </div>
             <div class="col-md-2">
                 <select id="filter-date" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
                     <option value="all">📅 Все время</option>
@@ -45,14 +47,16 @@
                     <option value="">Все направления</option><option value="BUY">BUY</option><option value="SELL">SELL</option>
                 </select>
             </div>
-            <div class="col-md-6">
-                <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск по ошибкам или психологии..." oninput="applyFilters()">
+            <div class="col-md-4">
+                <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск: имя (Регина), тикет, ошибки..." oninput="applyFilters()">
             </div>
         </div>
         <div class="row g-2">
             <div class="col-md-2">
-                <select id="filter-tf" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyFilters()">
-                    <option value="">Все ТФ</option><option value="M1">M1</option><option value="M5">M5</option><option value="M15">M15</option><option value="H1">H1</option><option value="H4">H4</option><option value="D1">D1</option>
+                <select id="filter-pnl" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyFilters()">
+                    <option value="">Все результаты</option>
+                    <option value="win">🟢 Только Профит (Тейки)</option>
+                    <option value="loss">🔴 Только Убыток (Стопы)</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -66,8 +70,10 @@
             <div class="col-md-3">
                 <select id="filter-logic" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyFilters()">
                     <option value="">Любая логика входа</option>
-                    <option value="По тренду">✅ По тренду (после отката)</option>
-                    <option value="Разворот">🔄 Разворот (Контр-тренд)</option>
+                    <option value="По тренду">✅ По тренду</option>
+                    <option value="Разворот">🔄 Разворот</option>
+                    <option value="От нижней границы">📈 От нижней границы (Боковик)</option>
+                    <option value="От верхней границы">📉 От верхней границы (Боковик)</option>
                     <option value="Тест/Ошибка">🔧 Техническая (Тест)</option>
                     <option value="Чужая сделка">👽 Чужая сделка</option>
                 </select>
@@ -184,6 +190,36 @@
         reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
         setupSmartDropzones();
     });
+    async function uploadCSV() {
+        const fileInput = document.getElementById('csv-upload');
+        const file = fileInput.files[0];
+        if(!file) return;
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        // Берем смещение брокера из настроек твоего профиля (по умолчанию 3)
+        const brokerOffset = localStorage.getItem('broker_tz_offset') || "3";
+        fd.append('broker_offset', brokerOffset);
+
+        alert("Загружаем историю сделок... Пожалуйста, подождите.");
+
+        const res = await fetch(API_BASE + 'trades/upload_history/', {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        });
+
+        const data = await res.json();
+
+        if(res.ok) {
+            alert(data.message);
+            fileInput.value = ''; // Очищаем форму, чтобы можно было загрузить еще раз
+            initPage(); // Мгновенно обновляем таблицу Дневника
+        } else {
+            alert("Ошибка импорта: " + data.error);
+        }
+    }
 
     async function initPage() {
         const tzOffset = localStorage.getItem('user_tz_offset') || "+3";
@@ -201,40 +237,51 @@
     // 👇 ФУНКЦИЯ ФИЛЬТРАЦИИ ОБНОВЛЕНА ДЛЯ РАБОТЫ СО ВРЕМЕНЕМ И РАЗБОРОМ 👇
     function applyFilters() {
         const typeVal = document.getElementById('filter-type').value;
-        const tfVal = document.getElementById('filter-tf').value;
+        const pnlVal = document.getElementById('filter-pnl').value; // 👈 ВЗЯЛИ ФИЛЬТР PnL ВМЕСТО TF
         const searchVal = document.getElementById('filter-search').value.toLowerCase();
         const trendVal = document.getElementById('filter-trend').value;
         const logicVal = document.getElementById('filter-logic').value;
         const dateVal = document.getElementById('filter-date').value;
+        const exactDateVal = document.getElementById('filter-exact-date').value;
         const reviewVal = document.getElementById('filter-review').value;
 
         const now = new Date();
 
         const filtered = allTradesData.filter(t => {
             const matchType = typeVal ? t.type === typeVal : true;
-            const matchTf = tfVal ? t.timeframe === tfVal : true;
             const matchTrend = trendVal ? t.market_trend === trendVal : true;
             const matchLogic = logicVal ? t.entry_logic === logicVal : true;
-            const matchSearch = ((t.strategy_name||'') + (t.comment||'') + (t.psychology||'')).toLowerCase().includes(searchVal);
 
-            // Фильтр по дате (Неделя / Месяц)
+            // 👇 ЛОГИКА НОВОГО ФИЛЬТРА PnL 👇
+            let matchPnl = true;
+            if (pnlVal === 'win' && t.profit <= 0) matchPnl = false;
+            if (pnlVal === 'loss' && t.profit >= 0) matchPnl = false;
+
+            const matchSearch = ((t.ticket||'') + ' ' + (t.strategy_name||'') + ' ' + (t.comment||'') + ' ' + (t.psychology||'')).toLowerCase().includes(searchVal);
+
             let matchDate = true;
             const tDate = new Date(t.time);
-            if (dateVal === 'week') {
-                const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
-                if (tDate < weekAgo) matchDate = false;
-            } else if (dateVal === 'month') {
-                const monthAgo = new Date(); monthAgo.setDate(now.getDate() - 30);
-                if (tDate < monthAgo) matchDate = false;
+
+            if (exactDateVal) {
+                const localDateStr = tDate.getFullYear() + '-' + String(tDate.getMonth() + 1).padStart(2, '0') + '-' + String(tDate.getDate()).padStart(2, '0');
+                if (localDateStr !== exactDateVal) matchDate = false;
+            } else {
+                if (dateVal === 'week') {
+                    const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+                    if (tDate < weekAgo) matchDate = false;
+                } else if (dateVal === 'month') {
+                    const monthAgo = new Date(); monthAgo.setDate(now.getDate() - 30);
+                    if (tDate < monthAgo) matchDate = false;
+                }
             }
 
-            // Фильтр по наличию разбора (RS)
             let matchReview = true;
             const hasReview = t.mentor_reviews && t.mentor_reviews.length > 0;
             if (reviewVal === 'with_review' && !hasReview) matchReview = false;
             if (reviewVal === 'no_review' && hasReview) matchReview = false;
 
-            return matchType && matchTf && matchTrend && matchLogic && matchSearch && matchDate && matchReview;
+            // Возвращаем результат со всеми фильтрами (matchPnl вместо matchTf)
+            return matchType && matchPnl && matchTrend && matchLogic && matchSearch && matchDate && matchReview;
         });
 
         renderTable(filtered);
@@ -293,6 +340,7 @@
         const extraFactors = factors.filter(f => !stdFactors.includes(f)).join(', ');
         const isSel = (val, field) => (t[field] === val) ? 'selected' : '';
 
+        // Формируем правильную шапку для окна разбора
         let topContext = `
             <div class="card bg-info bg-opacity-10 border-info p-3 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
@@ -315,6 +363,8 @@
                             <option value="">-- Не указана --</option>
                             <option value="По тренду" ${isSel('По тренду', 'entry_logic')}>✅ По тренду</option>
                             <option value="Разворот" ${isSel('Разворот', 'entry_logic')}>🔄 Разворот</option>
+                            <option value="От нижней границы" ${isSel('От нижней границы', 'entry_logic')}>📈 От нижней границы (Боковик)</option>
+                            <option value="От верхней границы" ${isSel('От верхней границы', 'entry_logic')}>📉 От верхней границы (Боковик)</option>
                             <option value="Тест/Ошибка" ${isSel('Тест/Ошибка', 'entry_logic')}>🔧 Техническая (Тест)</option>
                             <option value="Чужая сделка" ${isSel('Чужая сделка', 'entry_logic')}>👽 Чужая сделка</option>
                         </select>
@@ -338,6 +388,15 @@
                             <option value="C" ${isSel('C', 'setup_grade')}>⚠️ C</option>
                         </select>
                     </div>
+                    ${t.entry_logic === 'Чужая сделка' ? `
+                    <div class="col-md-3 mt-2">
+                        <label class="small text-warning mb-1">Изменить результат</label>
+                        <select id="modal-profit" class="form-select form-select-sm bg-dark text-light border-warning">
+                            <option value="1" ${t.profit > 0 ? 'selected' : ''}>🟢 Профит</option>
+                            <option value="-1" ${t.profit < 0 ? 'selected' : ''}>🔴 Убыток</option>
+                            <option value="0" ${t.profit === 0 ? 'selected' : ''}>⚪ Б/У</option>
+                        </select>
+                    </div>` : ''}
                 </div>
 
                 <div class="row g-3">
@@ -382,6 +441,11 @@
         fd.append('psychology', document.getElementById('modal-psy').value);
         fd.append('setup_grade', document.getElementById('modal-grade').value);
         fd.append('strategy_name', '');
+        // 👇 НОВЫЕ ТРИ СТРОЧКИ: Записываем профит, если поле существует 👇
+        const profitEl = document.getElementById('modal-profit');
+        if (profitEl) {
+            fd.append('profit', profitEl.value);
+        }
 
         const res = await fetch(`${API_BASE}trades/${id}/`, {
             method: 'PATCH',
@@ -592,4 +656,54 @@
     }
 
 </script>
+
+<div class="offcanvas offcanvas-end bg-dark text-light border-start border-secondary" tabindex="-1" id="rulesOffcanvas" style="width: 450px;">
+    <div class="offcanvas-header border-bottom border-secondary bg-black">
+        <h5 class="offcanvas-title text-info">🧠 Моя Торговая Конституция</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body" style="font-size: 0.9rem;">
+
+        <h6 class="text-warning fw-bold border-bottom border-warning pb-1">🔄 Правила входа: РАЗВОРОТ</h6>
+        <ul class="text-muted ps-3 mb-4">
+            <li>Снятие значимого пула ликвидности, свинга (1M, 1W, 1D, 4H, 1H) или сессий.</li>
+            <li>Нахождение цены в HTF зоне интереса (ОБ, ББ, МБ, FVG).</li>
+            <li>Свип локальной ликвидности.</li>
+            <li>Импульсное смещение с имбалансом на M1.</li>
+            <li>Слом структуры (MSS) M5 -> M1.</li>
+            <li>Наличие фигуры STB-BTS на M1.</li>
+            <li>Синхронизация ТФ согласно контекста и тренда.</li>
+            <li>Понимание границ PD Array HTF (не ниже M15) для постановки стопа и тейка (R:R > 3).</li>
+            <li>Вход на тесте имбаланса M1-M5, на первом ОБ или на propulsion (втором ОБ, как подтверждение).</li>
+        </ul>
+
+        <h6 class="text-success fw-bold border-bottom border-success pb-1">✅ Правила входа: ПО ТРЕНДУ</h6>
+        <ul class="text-muted ps-3 mb-4">
+            <li>Понимание границ PD Array для определения текущего тренда.</li>
+            <li>Обязательно должна быть цель на HTF (несобранный пул ликвидности или зона интереса).</li>
+            <li>Вход строго в Premium/Discount зоне согласно направлению тренда.</li>
+            <li>Обязательно смещение на M1 с имбалансом.</li>
+            <li>Смотрим структуру Order Flow (ОФ) и снятие ликвидности, чтобы самому не стать ликвидностью.</li>
+            <li>Определяем силу или слабость текущего ОФ.</li>
+            <li>Синхронизация таймфреймов по ОФ.</li>
+            <li>Вход на откате, на тесте имбаланса M1-M5-M15.</li>
+        </ul>
+
+        <h6 class="text-danger fw-bold border-bottom border-danger pb-1">🛑 ПСИХОЛОГИЯ И БАЗА</h6>
+        <div class="alert bg-danger bg-opacity-10 border-danger text-light p-2 mb-2">
+            <strong>Перестаешь понимать график?</strong><br>
+            Закрывай терминал либо на день, либо пока цена не снимет таргеты, которые ты наметил при первоначальном анализе. Садись за график только с чистой головой.
+        </div>
+        <div class="alert bg-danger bg-opacity-10 border-danger text-light p-2 mb-2">
+            <strong>Получил пару стопов?</strong><br>
+            Не впадай в состояние "мне надо отбить прямо сейчас". Даже если таргеты определены верно, цена может идти к ним мерзко и нудно. Жди их снятия или снятия противоположных пулов.
+        </div>
+        <div class="alert bg-warning bg-opacity-10 border-warning text-light p-2 mb-2">
+            <strong>Ты торгуешь ВЕРОЯТНОСТИ!</strong><br>
+            Заходи только там, где вероятности на твоей стороне (где факторов "ЗА" гораздо больше, чем "ПРОТИВ"). Адекватно следуй анализу и применяй всё, чему учился. Без отсебятины!
+        </div>
+
+    </div>
+</div>
+
 {% endblock %}

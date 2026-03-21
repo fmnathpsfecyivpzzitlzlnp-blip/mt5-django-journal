@@ -7,8 +7,8 @@
 #property version   "5.00"
 
 // --- НАСТРОЙКИ СЕРВЕРА ---
-input string InpUsername = "trader1";
-input string InpPassword = "1qaz2wsxZX!@";
+input string InpUsername = "trade1";
+input string InpPassword = "123";
 input string InpUrl = "http://127.0.0.1:8000/api/mt5_webhook/";
 
 // --- НАСТРОЙКИ ПАНЕЛИ ---

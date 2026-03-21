@@ -1,9 +1,38 @@
 {% extends "base.html" %}
 
+{% block extra_head %}
+<style>
+    /* Стиль для умной зоны сброса картинки */
+    .smart-dropzone:focus {
+        border-color: #ffc107 !important;
+        background-color: rgba(255, 193, 7, 0.1) !important;
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.2);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="text-light">📘 Мой Playbook (Эталонные Сетапы)</h4>
     <button class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#addPlaybookModal">➕ Добавить Сетап</button>
+</div>
+
+<div class="alert bg-black border-secondary mb-4 shadow-sm p-3">
+    <h6 class="text-light mb-3 border-bottom border-secondary pb-2">🗺️ Легенда: Как использовать матрицу</h6>
+    <div class="row small">
+        <div class="col-md-4 mb-3">
+            <strong class="text-success">📈 ЛОНГ / 📉 ШОРТ (По Тренду):</strong><br>
+            <span class="text-muted">Работа в потоке ордеров (Order Flow). Вход на откате (FVG/OB) после снятия внутренней ликвидности.</span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <strong class="text-info">📈 ЛОНГ / 📉 ШОРТ (Разворот):</strong><br>
+            <span class="text-muted">Ловля дна/пика после манипуляции. Снятие глобальной ликвидности (BSL/SSL) на HTF + импульсный слом (MSS).</span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <strong class="text-secondary">↔️ БОКОВИК (Торговля в рендже):</strong><br>
+            <span class="text-muted">Работа в консолидации. Покупка от нижней границы (девиация под минимумом) и продажа от верхней границы.</span>
+        </div>
+    </div>
 </div>
 
 <div class="row g-4">
@@ -12,7 +41,7 @@
             <div class="card-header bg-success bg-opacity-25 border-success text-success fw-bold text-center">
                 📈 ЛОНГ + ✅ ПО ТРЕНДУ
             </div>
-            <div class="card-body row g-3" id="pb-long-trend">
+            <div class="card-body row g-3" id="pb-long-trend" style="min-height: 250px; align-content: flex-start;">
                 <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
             </div>
         </div>
@@ -23,7 +52,7 @@
             <div class="card-header bg-info bg-opacity-25 border-info text-info fw-bold text-center">
                 📈 ЛОНГ + 🔄 РАЗВОРОТ
             </div>
-            <div class="card-body row g-3" id="pb-long-rev">
+            <div class="card-body row g-3" id="pb-long-rev" style="min-height: 250px; align-content: flex-start;">
                 <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
             </div>
         </div>
@@ -34,7 +63,7 @@
             <div class="card-header bg-danger bg-opacity-25 border-danger text-danger fw-bold text-center">
                 📉 ШОРТ + ✅ ПО ТРЕНДУ
             </div>
-            <div class="card-body row g-3" id="pb-short-trend">
+            <div class="card-body row g-3" id="pb-short-trend" style="min-height: 250px; align-content: flex-start;">
                 <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
             </div>
         </div>
@@ -45,7 +74,29 @@
             <div class="card-header bg-warning bg-opacity-25 border-warning text-warning fw-bold text-center">
                 📉 ШОРТ + 🔄 РАЗВОРОТ
             </div>
-            <div class="card-body row g-3" id="pb-short-rev">
+            <div class="card-body row g-3" id="pb-short-rev" style="min-height: 250px; align-content: flex-start;">
+                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card bg-dark border-secondary h-100 shadow">
+            <div class="card-header bg-secondary bg-opacity-25 border-secondary text-light fw-bold text-center">
+                ↔️ БОКОВИК + 📈 ЛОНГ (От нижней границы)
+            </div>
+            <div class="card-body row g-3" id="pb-range-long" style="min-height: 250px; align-content: flex-start;">
+                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card bg-dark border-secondary h-100 shadow">
+            <div class="card-header bg-secondary bg-opacity-25 border-secondary text-light fw-bold text-center">
+                ↔️ БОКОВИК + 📉 ШОРТ (От верхней границы)
+            </div>
+            <div class="card-body row g-3" id="pb-range-short" style="min-height: 250px; align-content: flex-start;">
                 <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
             </div>
         </div>
@@ -53,44 +104,59 @@
 </div>
 
 <div class="modal fade" id="addPlaybookModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content bg-dark border-warning">
             <div class="modal-header bg-black border-secondary">
                 <h5 class="modal-title text-warning">Добавить A+ Сетап</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="text-secondary small">Название (Напр: Silver Bullet)</label>
+                        <label class="text-secondary small mb-1">Название (Напр: Снятие BSL)</label>
                         <input type="text" id="pb-title" class="form-control bg-dark text-light border-secondary">
                     </div>
+
                     <div class="col-md-6">
-                        <label class="text-secondary small">Скриншот эталона</label>
-                        <input type="file" id="pb-image" class="form-control bg-dark text-light border-secondary" accept="image/*">
+                        <label class="text-secondary small mb-1">Скриншот эталона</label>
+                        <div id="pb-dropzone" tabindex="0" class="smart-dropzone p-3 text-center rounded position-relative" style="border: 2px dashed #ffc107; outline: none; cursor: default; min-height: 100px;">
+                            <span id="pb-drop-text" class="text-muted small d-block py-2">
+                                📋 <b>Кликни сюда и нажми Ctrl+V</b><br>или<br>
+                                <button type="button" class="btn btn-sm btn-outline-warning mt-2" onclick="document.getElementById('pb-file-input').click();">📁 Выбрать файл</button>
+                            </span>
+                            <input type="file" id="pb-file-input" class="d-none" accept="image/*">
+                            <div id="pb-preview-container" class="d-none mt-2 position-relative">
+                                <img id="pb-preview-img" src="" class="img-fluid rounded border border-warning shadow-sm" style="max-height: 150px; object-fit: contain;">
+                                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 py-0 px-2" onclick="clearPbDropzone(event)">✖</button>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="col-md-6">
-                        <label class="text-secondary small">Макро-Тренд</label>
+                        <label class="text-secondary small mb-1">Макро-Тренд</label>
                         <select id="pb-trend" class="form-select bg-dark text-light border-secondary">
                             <option value="Лонговый">📈 Лонговый</option>
                             <option value="Шортовый">📉 Шортовый</option>
+                            <option value="Боковик">↔️ Боковик (Range)</option>
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="text-secondary small">Логика входа</label>
+                        <label class="text-secondary small mb-1">Логика входа</label>
                         <select id="pb-logic" class="form-select bg-dark text-light border-secondary">
                             <option value="По тренду">✅ По тренду</option>
                             <option value="Разворот">🔄 Разворот</option>
+                            <option value="От нижней границы">📈 От нижней границы (Лонг в боковике)</option>
+                            <option value="От верхней границы">📉 От верхней границы (Шорт в боковике)</option>
                         </select>
                     </div>
                     <div class="col-12">
-                        <label class="text-secondary small">Описание / Ключевые факторы</label>
-                        <textarea id="pb-desc" class="form-control bg-dark text-light border-secondary" rows="3" placeholder="Обязательно наличие FVG + Снятие ликвидности..."></textarea>
+                        <label class="text-secondary small mb-1">Описание / Ключевые факторы</label>
+                        <textarea id="pb-desc" class="form-control bg-dark text-light border-secondary" rows="4" placeholder="Обязательно наличие FVG + Снятие ликвидности..."></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-warning w-100 fw-bold" onclick="uploadPlaybook()">Сохранить в матрицу</button>
+                <button type="button" class="btn btn-warning w-100 fw-bold fs-6 py-2" onclick="uploadPlaybook()">Сохранить в матрицу</button>
             </div>
         </div>
     </div>
@@ -99,20 +165,24 @@
 
 {% block scripts %}
 <script>
+    let pbFile = null;
+
     async function initPage() {
         await loadPlaybook();
+        setupPbDropzone();
     }
 
     async function loadPlaybook() {
         const res = await fetch(API_BASE + 'playbook/');
         const data = await res.json();
 
-        // Очищаем контейнеры
         const containers = {
             'Лонговый_По тренду': document.getElementById('pb-long-trend'),
             'Лонговый_Разворот': document.getElementById('pb-long-rev'),
             'Шортовый_По тренду': document.getElementById('pb-short-trend'),
-            'Шортовый_Разворот': document.getElementById('pb-short-rev')
+            'Шортовый_Разворот': document.getElementById('pb-short-rev'),
+            'Боковик_От нижней границы': document.getElementById('pb-range-long'),
+            'Боковик_От верхней границы': document.getElementById('pb-range-short')
         };
 
         for (let key in containers) containers[key].innerHTML = '';
@@ -123,33 +193,100 @@
             if (container) {
                 container.innerHTML += `
                     <div class="col-md-6">
-                        <div class="card bg-black border-secondary h-100">
-                            <img src="${p.image_url}" class="card-img-top" style="height: 120px; object-fit: cover; cursor: pointer;" onclick="window.open('${p.image_url}')">
+                        <div class="card bg-black border-secondary h-100 shadow-sm">
+                            <img src="${p.image_url}" class="card-img-top" style="height: 140px; object-fit: cover; cursor: pointer;" onclick="window.open('${p.image_url}')">
                             <div class="card-body p-2 position-relative">
                                 <h6 class="text-light mb-1 small fw-bold">${p.title}</h6>
                                 <p class="text-muted small mb-0" style="font-size: 0.75rem;">${p.description}</p>
-                                <button class="btn btn-sm btn-outline-danger position-absolute bottom-0 end-0 m-1 py-0 px-1" onclick="deletePlaybook(${p.id})">🗑️</button>
+                                <button class="btn btn-sm btn-outline-danger position-absolute bottom-0 end-0 m-1 py-0 px-1" title="Удалить" onclick="deletePlaybook(${p.id})">🗑️</button>
                             </div>
                         </div>
                     </div>
                 `;
             }
         });
+
+        for (let key in containers) {
+            if (containers[key].innerHTML.trim() === '') {
+                containers[key].innerHTML = '<div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>';
+            }
+        }
+    }
+
+    function setupPbDropzone() {
+        const dropzone = document.getElementById('pb-dropzone');
+        const fileInput = document.getElementById('pb-file-input');
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) setPbPreview(e.target.files[0]);
+        });
+
+        dropzone.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const items = (e.clipboardData || window.clipboardData).items;
+            for (let index in items) {
+                let item = items[index];
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    setPbPreview(item.getAsFile());
+                    break;
+                }
+            }
+        });
+
+        dropzone.addEventListener('focus', () => {
+            dropzone.style.borderColor = '#ffc107';
+            dropzone.style.backgroundColor = 'rgba(255, 193, 7, 0.1)';
+        });
+        dropzone.addEventListener('blur', () => {
+            dropzone.style.borderColor = '#ffc107';
+            dropzone.style.backgroundColor = 'transparent';
+        });
+    }
+
+    function setPbPreview(file) {
+        if (!file) return;
+        pbFile = file;
+        const previewContainer = document.getElementById('pb-preview-container');
+        const previewImg = document.getElementById('pb-preview-img');
+        const dropText = document.getElementById('pb-drop-text');
+
+        previewImg.src = URL.createObjectURL(pbFile);
+        previewContainer.classList.remove('d-none');
+        dropText.classList.add('d-none');
+    }
+
+    function clearPbDropzone(event) {
+        if(event) event.stopPropagation();
+        pbFile = null;
+        document.getElementById('pb-file-input').value = '';
+        document.getElementById('pb-preview-container').classList.add('d-none');
+        document.getElementById('pb-drop-text').classList.remove('d-none');
+        document.getElementById('pb-preview-img').src = '';
     }
 
     async function uploadPlaybook() {
         const fd = new FormData();
-        fd.append('title', document.getElementById('pb-title').value);
+        const title = document.getElementById('pb-title').value;
+        const trend = document.getElementById('pb-trend').value;
+        const logic = document.getElementById('pb-logic').value;
+
+        if (!title) return alert('Укажите название сетапа!');
+
+        fd.append('title', title);
         fd.append('description', document.getElementById('pb-desc').value);
-        fd.append('market_trend', document.getElementById('pb-trend').value);
-        fd.append('entry_logic', document.getElementById('pb-logic').value);
-        
-        const fileInput = document.getElementById('pb-image');
-        if (fileInput.files.length > 0) {
-            fd.append('image', fileInput.files[0]);
+        fd.append('market_trend', trend);
+        fd.append('entry_logic', logic);
+
+        if (pbFile) {
+            fd.append('image', pbFile);
         } else {
-            return alert('Пожалуйста, прикрепите картинку!');
+            return alert('Пожалуйста, добавьте скриншот эталона из буфера или файла!');
         }
+
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Загрузка...";
 
         const res = await fetch(API_BASE + 'playbook/', {
             method: 'POST',
@@ -157,13 +294,14 @@
             headers: { 'X-CSRFToken': getCookie('csrftoken') }
         });
 
+        btn.disabled = false;
+        btn.innerText = originalText;
+
         if (res.ok) {
             bootstrap.Modal.getInstance(document.getElementById('addPlaybookModal')).hide();
-            // Очищаем форму
             document.getElementById('pb-title').value = '';
             document.getElementById('pb-desc').value = '';
-            fileInput.value = '';
-            
+            clearPbDropzone();
             await loadPlaybook();
         } else {
             alert('Ошибка при загрузке');

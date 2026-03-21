@@ -34,9 +34,17 @@
                         <label class="small text-secondary mb-1">Дата</label>
                         <input type="date" id="man-date" class="form-control bg-dark text-light border-secondary">
                     </div>
+                    <div class="col-md-12">
+                        <label class="small text-secondary mb-1">Результат сделки</label>
+                        <select id="man-profit" class="form-select bg-dark text-light border-secondary">
+                            <option value="1">🟢 Профит (Тейк)</option>
+                            <option value="-1">🔴 Убыток (Стоп)</option>
+                            <option value="0">⚪ Б/У (Ноль)</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="mt-4 alert alert-dark border-secondary small text-muted p-2">
-                    ℹ️ <b>Объем и PnL будут равны 0.</b> Эти сделки не испортят твою личную статистику доходности. Ссылки на TradingView и логику добавишь уже внутри разбора.
+                    ℹ️ <b>Объем будет равен 0.</b> Условный PnL (+1 или -1) нужен только для фильтров дневника и не испортит твою общую статистику доходности.
                 </div>
             </div>
             <div class="modal-footer border-secondary">
@@ -286,6 +294,7 @@
             type: document.getElementById('man-type').value,
             symbol: document.getElementById('man-symbol').value,
             date: document.getElementById('man-date').value
+            profit: document.getElementById('man-profit').value // 👈 ДОБАВИЛИ ЭТУ СТРОКУ
         };
 
         if (!payload.date) return alert("Укажи дату сделки!");
