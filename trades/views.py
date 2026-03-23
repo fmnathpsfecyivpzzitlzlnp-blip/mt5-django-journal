@@ -17,8 +17,12 @@ from .serializers import TradeSerializer # <--- ДОБАВИТЬ ЭТУ СТРО
 import random
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
+from .models import TradingRule
+from .serializers import TradingRuleSerializer
+
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
+
 
 
 @api_view(['POST'])
@@ -445,3 +449,13 @@ def mt5_webhook(request):
         return Response({"message": "Сделка и скриншоты успешно загружены!"}, status=201)
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+
+class TradingRuleViewSet(viewsets.ModelViewSet):
+    serializer_class = TradingRuleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return TradingRule.objects.filter(user=self.request.user).order_by('created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

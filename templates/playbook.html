@@ -1,12 +1,11 @@
-{% extends "base.html" %}
+git add .{% extends "base.html" %}
 
 {% block extra_head %}
 <style>
-    /* Стиль для умной зоны сброса картинки */
-    .smart-dropzone:focus {
-        border-color: #ffc107 !important;
-        background-color: rgba(255, 193, 7, 0.1) !important;
-        box-shadow: 0 0 15px rgba(255, 193, 7, 0.2);
+    .smart-dropzone:focus { 
+        border-color: #ffc107 !important; 
+        background-color: rgba(255, 193, 7, 0.1) !important; 
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.2); 
     }
 </style>
 {% endblock %}
@@ -14,7 +13,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="text-light">📘 Мой Playbook (Эталонные Сетапы)</h4>
-    <button class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#addPlaybookModal">➕ Добавить Сетап</button>
+    <div>
+        <button class="btn btn-outline-info fw-bold me-2" data-bs-toggle="offcanvas" data-bs-target="#mindsetOffcanvas">
+            🧘‍♂️ Дзен Трейдера (Настрой)
+        </button>
+        <button class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#addPlaybookModal">➕ Добавить Сетап</button>
+    </div>
 </div>
 
 <div class="alert bg-black border-secondary mb-4 shadow-sm p-3">
@@ -41,64 +45,47 @@
             <div class="card-header bg-success bg-opacity-25 border-success text-success fw-bold text-center">
                 📈 ЛОНГ + ✅ ПО ТРЕНДУ
             </div>
-            <div class="card-body row g-3" id="pb-long-trend" style="min-height: 250px; align-content: flex-start;">
-                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
-            </div>
+            <div class="card-body row g-3" id="pb-long-trend" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card bg-dark border-info h-100 shadow">
             <div class="card-header bg-info bg-opacity-25 border-info text-info fw-bold text-center">
                 📈 ЛОНГ + 🔄 РАЗВОРОТ
             </div>
-            <div class="card-body row g-3" id="pb-long-rev" style="min-height: 250px; align-content: flex-start;">
-                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
-            </div>
+            <div class="card-body row g-3" id="pb-long-rev" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card bg-dark border-danger h-100 shadow">
             <div class="card-header bg-danger bg-opacity-25 border-danger text-danger fw-bold text-center">
                 📉 ШОРТ + ✅ ПО ТРЕНДУ
             </div>
-            <div class="card-body row g-3" id="pb-short-trend" style="min-height: 250px; align-content: flex-start;">
-                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
-            </div>
+            <div class="card-body row g-3" id="pb-short-trend" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card bg-dark border-warning h-100 shadow">
             <div class="card-header bg-warning bg-opacity-25 border-warning text-warning fw-bold text-center">
                 📉 ШОРТ + 🔄 РАЗВОРОТ
             </div>
-            <div class="card-body row g-3" id="pb-short-rev" style="min-height: 250px; align-content: flex-start;">
-                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
-            </div>
+            <div class="card-body row g-3" id="pb-short-rev" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card bg-dark border-secondary h-100 shadow">
             <div class="card-header bg-secondary bg-opacity-25 border-secondary text-light fw-bold text-center">
                 ↔️ БОКОВИК + 📈 ЛОНГ (От нижней границы)
             </div>
-            <div class="card-body row g-3" id="pb-range-long" style="min-height: 250px; align-content: flex-start;">
-                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
-            </div>
+            <div class="card-body row g-3" id="pb-range-long" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card bg-dark border-secondary h-100 shadow">
             <div class="card-header bg-secondary bg-opacity-25 border-secondary text-light fw-bold text-center">
                 ↔️ БОКОВИК + 📉 ШОРТ (От верхней границы)
             </div>
-            <div class="card-body row g-3" id="pb-range-short" style="min-height: 250px; align-content: flex-start;">
-                <div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>
-            </div>
+            <div class="card-body row g-3" id="pb-range-short" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
 </div>
@@ -116,7 +103,7 @@
                         <label class="text-secondary small mb-1">Название (Напр: Снятие BSL)</label>
                         <input type="text" id="pb-title" class="form-control bg-dark text-light border-secondary">
                     </div>
-
+                    
                     <div class="col-md-6">
                         <label class="text-secondary small mb-1">Скриншот эталона</label>
                         <div id="pb-dropzone" tabindex="0" class="smart-dropzone p-3 text-center rounded position-relative" style="border: 2px dashed #ffc107; outline: none; cursor: default; min-height: 100px;">
@@ -130,6 +117,7 @@
                                 <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 py-0 px-2" onclick="clearPbDropzone(event)">✖</button>
                             </div>
                         </div>
+                        <input type="text" id="pb-url-input" class="form-control form-control-sm bg-dark text-light border-secondary mt-2" placeholder="Или вставь ссылку TradingView">
                     </div>
 
                     <div class="col-md-6">
@@ -161,15 +149,42 @@
         </div>
     </div>
 </div>
+
+<div class="offcanvas offcanvas-start bg-dark text-light border-end border-info" tabindex="-1" id="mindsetOffcanvas" style="width: 450px;">
+    <div class="offcanvas-header border-bottom border-info bg-black">
+        <h5 class="offcanvas-title text-info">🧘‍♂️ Дзен Трейдера: Настрой на сессию</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column p-0" style="font-size: 0.95rem;">
+        <div id="rules-container" class="flex-grow-1 overflow-auto p-3">
+            <div class="text-center text-muted mt-5 spinner-border spinner-border-sm"></div>
+        </div>
+        <div class="border-top border-secondary p-3 bg-black mt-auto">
+            <h6 class="text-light small mb-2">➕ Добавить свою установку</h6>
+            <select id="new-rule-cat" class="form-select form-select-sm bg-dark text-light border-secondary mb-2">
+                <option value="mantra">📜 Мантра (Установка на день)</option>
+                <option value="rule">💎 Золотое правило (Дисциплина)</option>
+                <option value="warning">⚠️ Опасность (Когда уходить)</option>
+            </select>
+            <textarea id="new-rule-text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2" rows="2" placeholder="Напиши инсайт из своей торговли..."></textarea>
+            <button class="btn btn-info btn-sm w-100 fw-bold text-dark" onclick="addRule()">Сохранить правило</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
     let pbFile = null;
 
+    document.addEventListener("DOMContentLoaded", () => {
+        initPage();
+    });
+
     async function initPage() {
         await loadPlaybook();
         setupPbDropzone();
+        await loadRules();
     }
 
     async function loadPlaybook() {
@@ -213,9 +228,11 @@
         }
     }
 
+    // 👇 ОБНОВЛЕННЫЙ ПАРСИНГ ССЫЛОК 👇
     function setupPbDropzone() {
         const dropzone = document.getElementById('pb-dropzone');
         const fileInput = document.getElementById('pb-file-input');
+        const urlInput = document.getElementById('pb-url-input');
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) setPbPreview(e.target.files[0]);
@@ -228,9 +245,20 @@
                 let item = items[index];
                 if (item.kind === 'file' && item.type.startsWith('image/')) {
                     setPbPreview(item.getAsFile());
-                    break;
+                    break; 
+                } else if (item.kind === 'string' && item.type === 'text/plain') {
+                    item.getAsString(text => {
+                        if (text.includes('tradingview.com/x/')) { 
+                            urlInput.value = text; 
+                            setPbPreview(text); 
+                        }
+                    });
                 }
             }
+        });
+
+        urlInput.addEventListener('input', (e) => { 
+            if (e.target.value.includes('tradingview.com/x/')) setPbPreview(e.target.value); 
         });
 
         dropzone.addEventListener('focus', () => {
@@ -238,27 +266,35 @@
             dropzone.style.backgroundColor = 'rgba(255, 193, 7, 0.1)';
         });
         dropzone.addEventListener('blur', () => {
-            dropzone.style.borderColor = '#ffc107';
+            dropzone.style.borderColor = '#ffc107'; 
             dropzone.style.backgroundColor = 'transparent';
         });
     }
 
-    function setPbPreview(file) {
-        if (!file) return;
-        pbFile = file;
+    function setPbPreview(fileOrUrl) {
+        if (!fileOrUrl) return;
         const previewContainer = document.getElementById('pb-preview-container');
         const previewImg = document.getElementById('pb-preview-img');
         const dropText = document.getElementById('pb-drop-text');
 
-        previewImg.src = URL.createObjectURL(pbFile);
+        if (typeof fileOrUrl === 'string') { 
+            previewImg.src = fileOrUrl; 
+            pbFile = null; 
+        } else { 
+            previewImg.src = URL.createObjectURL(fileOrUrl); 
+            pbFile = fileOrUrl; 
+            document.getElementById('pb-url-input').value = ''; 
+        }
+
         previewContainer.classList.remove('d-none');
         dropText.classList.add('d-none');
     }
 
     function clearPbDropzone(event) {
-        if(event) event.stopPropagation();
-        pbFile = null;
-        document.getElementById('pb-file-input').value = '';
+        if(event) event.stopPropagation(); 
+        pbFile = null; 
+        document.getElementById('pb-file-input').value = ''; 
+        document.getElementById('pb-url-input').value = ''; 
         document.getElementById('pb-preview-container').classList.add('d-none');
         document.getElementById('pb-drop-text').classList.remove('d-none');
         document.getElementById('pb-preview-img').src = '';
@@ -269,6 +305,7 @@
         const title = document.getElementById('pb-title').value;
         const trend = document.getElementById('pb-trend').value;
         const logic = document.getElementById('pb-logic').value;
+        const urlValue = document.getElementById('pb-url-input').value; // 👈 Берем ссылку
 
         if (!title) return alert('Укажите название сетапа!');
 
@@ -279,8 +316,10 @@
 
         if (pbFile) {
             fd.append('image', pbFile);
+        } else if (urlValue) {
+            fd.append('image_url', urlValue); // 👈 Отправляем ссылку на сервер
         } else {
-            return alert('Пожалуйста, добавьте скриншот эталона из буфера или файла!');
+            return alert('Пожалуйста, добавьте скриншот эталона из буфера или вставьте ссылку TradingView!');
         }
 
         const btn = event.target;
@@ -301,10 +340,10 @@
             bootstrap.Modal.getInstance(document.getElementById('addPlaybookModal')).hide();
             document.getElementById('pb-title').value = '';
             document.getElementById('pb-desc').value = '';
-            clearPbDropzone();
+            clearPbDropzone(); 
             await loadPlaybook();
         } else {
-            alert('Ошибка при загрузке');
+            alert('Ошибка при загрузке. Проверьте правильность ссылки.');
         }
     }
 
@@ -317,5 +356,135 @@
             await loadPlaybook();
         }
     }
+
+    async function loadRules() {
+        try {
+            const res = await fetch(API_BASE + 'rules/');
+            if(!res.ok) return;
+            const rules = await res.json();
+            
+            const container = document.getElementById('rules-container');
+            
+            let mantras = rules.filter(r => r.category === 'mantra');
+            let golds = rules.filter(r => r.category === 'rule');
+            let warnings = rules.filter(r => r.category === 'warning');
+
+            let html = '';
+
+            if (mantras.length > 0) {
+                html += `<div class="alert bg-black border-secondary text-light p-3 mb-4 shadow-sm">
+                    <h6 class="text-warning fw-bold mb-2">📜 Мантра перед открытием графика:</h6>
+                    <ul class="mb-0 text-muted ps-3 small">`;
+                mantras.forEach(r => {
+                    html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+            if (golds.length > 0) {
+                html += `<h6 class="text-success fw-bold border-bottom border-success pb-1 mt-4">💎 Золотые правила дисциплины</h6>
+                <ul class="text-muted ps-3 mb-4">`;
+                golds.forEach(r => {
+                    html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`;
+                });
+                html += `</ul>`;
+            }
+
+            if (warnings.length > 0) {
+                html += `<h6 class="text-danger fw-bold border-bottom border-danger pb-1 mt-4">⚠️ Признаки того, что пора уходить:</h6>
+                <div class="alert bg-danger bg-opacity-10 border-danger text-light p-3 mb-2 small">
+                    <ul class="mb-0 ps-3">`;
+                warnings.forEach(r => {
+                    html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+            if(rules.length === 0) {
+                html = '<div class="text-center text-muted mt-5 pt-5 small">Здесь пока пусто.<br>Добавь свои первые торговые установки внизу! 👇</div>';
+            }
+
+            container.innerHTML = html;
+        } catch (e) {
+            console.error("Ошибка API: убедись что миграции БД выполнены", e);
+        }
+    }
+
+    async function addRule() {
+        const cat = document.getElementById('new-rule-cat').value;
+        const text = document.getElementById('new-rule-text').value.trim();
+        if(!text) return alert("Введите текст правила!");
+
+        const btn = event.target;
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(API_BASE + 'rules/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ category: cat, text: text })
+            });
+            
+            btn.disabled = false;
+
+            if(res.ok) {
+                document.getElementById('new-rule-text').value = '';
+                loadRules(); 
+            } else {
+                alert("Ошибка сохранения");
+            }
+        } catch(e) {
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteRule(id) {
+        if(confirm("Точно удалить это правило?")) {
+            await fetch(API_BASE + `rules/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') }});
+            loadRules(); 
+        }
+    }
 </script>
 {% endblock %}
+Шаг 2: Учим Бэкенд скачивать ссылку из TradingView (trades/views.py)
+Так как Плейбук хранит эталонные скриншоты прямо на твоем сервере (в ImageField), нам нужно, чтобы при отправке ссылки сервер сам заходил на TradingView, скачивал картинку и сохранял её в карточку.
+
+Открой файл trades/views.py, найди класс PlaybookViewSet и полностью замени его функцию create на эту мощную версию:
+
+Python
+    def create(self, request):
+        try:
+            image_file = request.FILES.get('image')
+            image_url = request.data.get('image_url')
+
+            # 👇 ЕСЛИ ПРИСЛАЛИ ССЫЛКУ TRADINGVIEW - СКАЧИВАЕМ ЕЁ! 👇
+            if image_url and not image_file:
+                import requests
+                from django.core.files.base import ContentFile
+                import random
+                
+                # Скачиваем картинку по ссылке
+                resp = requests.get(image_url)
+                if resp.status_code == 200:
+                    # Генерируем уникальное имя файла и превращаем в файл для Django
+                    file_name = f"tv_playbook_{random.randint(1000, 9999)}.png"
+                    image_file = ContentFile(resp.content, name=file_name)
+                else:
+                    return Response({"error": "Не удалось скачать картинку по ссылке TradingView."}, status=400)
+
+            if not image_file:
+                return Response({"error": "Нет ни файла, ни рабочей ссылки."}, status=400)
+
+            # Создаем карточку Плейбука
+            p = PlaybookPattern.objects.create(
+                user=request.user,
+                title=request.data.get('title'),
+                description=request.data.get('description', ''),
+                market_trend=request.data.get('market_trend', 'Лонговый'),
+                entry_logic=request.data.get('entry_logic', 'По тренду'),
+                ideal_screenshot=image_file
+            )
+            return Response({"status": "Успешно добавлено!"})
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)

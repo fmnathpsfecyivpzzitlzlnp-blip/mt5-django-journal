@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep
+from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, TradingRule
 
 class TradeScreenshotSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,3 +19,9 @@ class TradeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trade
         fields = '__all__'
+
+class TradingRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TradingRule
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at']

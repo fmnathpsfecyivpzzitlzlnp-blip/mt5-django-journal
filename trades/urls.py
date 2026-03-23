@@ -1,14 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-# 👇 ОБЯЗАТЕЛЬНО добавили mt5_webhook в импорт 👇
-from .views import TradeViewSet, PlaybookViewSet, mt5_webhook
+from .views import TradeViewSet, PlaybookViewSet, mt5_webhook, TradingRuleViewSet
 
 router = DefaultRouter()
 # Твои сделки
 router.register(r'trades', TradeViewSet, basename='trade')
 # API для Playbook
 router.register(r'playbook', PlaybookViewSet, basename='playbook')
+router.register(r'rules', TradingRuleViewSet, basename='rules')
 
 urlpatterns = [
     path('', include(router.urls)),

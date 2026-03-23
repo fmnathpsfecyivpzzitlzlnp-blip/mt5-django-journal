@@ -87,3 +87,17 @@ class PlaybookPattern(models.Model):
 
     def __str__(self):
         return f"{self.market_trend} | {self.entry_logic} - {self.title}"
+
+class TradingRule(models.Model):
+    CATEGORY_CHOICES = [
+        ('mantra', '📜 Мантра'),
+        ('rule', '💎 Золотое правило'),
+        ('warning', '⚠️ Признак тильта')
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.CharField("Категория", max_length=20, choices=CATEGORY_CHOICES, default='rule')
+    text = models.TextField("Текст правила")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.get_category_display()} - {self.user.username}"
