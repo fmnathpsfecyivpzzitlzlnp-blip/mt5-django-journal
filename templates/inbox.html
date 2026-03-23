@@ -16,8 +16,8 @@
             <div class="modal-body p-4">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Автор (Чья сделка?)</label>
-                        <input type="text" id="man-author" class="form-control bg-dark text-light border-secondary" placeholder="Напр: Регина, RS..." value="Регина">
+                        <label class="small text-secondary mb-1">Автор (Напр: Регина, RS)</label>
+                        <input type="text" id="man-author" class="form-control bg-dark text-light border-secondary" value="Регина">
                     </div>
                     <div class="col-md-6">
                         <label class="small text-secondary mb-1">Направление</label>
@@ -44,7 +44,7 @@
                     </div>
                 </div>
                 <div class="mt-4 alert alert-dark border-secondary small text-muted p-2">
-                    ℹ️ <b>Объем будет равен 0.</b> Условный PnL (+1 или -1) нужен только для фильтров дневника и не испортит твою общую статистику доходности.
+                    ℹ️ <b>Объем и PnL будут равны 0.</b> Эти сделки не испортят твою личную статистику доходности. Ссылки на TradingView и логику добавишь уже внутри разбора.
                 </div>
             </div>
             <div class="modal-footer border-secondary">
@@ -293,25 +293,39 @@
             author: document.getElementById('man-author').value || 'Unknown',
             type: document.getElementById('man-type').value,
             symbol: document.getElementById('man-symbol').value,
-            date: document.getElementById('man-date').value
-            profit: document.getElementById('man-profit').value // 👈 ДОБАВИЛИ ЭТУ СТРОКУ
+            date: document.getElementById('man-date').value,  // 👈 ВОТ ЗДЕСЬ НЕ ХВАТАЛО ЗАПЯТОЙ!
+            profit: document.getElementById('man-profit').value
         };
 
         if (!payload.date) return alert("Укажи дату сделки!");
 
-        const res = await fetch(`${API_BASE}trades/add_manual/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            body: JSON.stringify(payload)
-        });
+        const btn = event.target;
+        const origText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Создание...";
 
-        if (res.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
-            document.getElementById('man-date').value = '';
-            initPage();
-        } else {
-            const err = await res.json();
-            alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
+        try {
+            const res = await fetch(`${API_BASE}trades/add_manual/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify(payload)
+            });
+
+            btn.disabled = false;
+            btn.innerText = origText;
+
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
+                document.getElementById('man-date').value = '';
+                initPage();
+            } else {
+                const err = await res.json();
+                alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerText = origText;
+            alert("Ошибка сети");
         }
     }
 
