@@ -16,10 +16,12 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📖 Мой Дневник</h4>
     <div>
+        <button class="btn btn-outline-info fw-bold me-2" data-bs-toggle="offcanvas" data-bs-target="#rulesOffcanvas">🧠 Моя База (Правила)</button>
         <input type="file" id="csv-upload" accept=".csv" style="display: none;" onchange="uploadCSV()">
         <button class="btn btn-success" onclick="document.getElementById('csv-upload').click()">📥 Импорт (CSV)</button>
     </div>
 </div>
+
 <div class="row mb-3" id="stats-container"></div>
 
 <div class="card shadow mb-4">
@@ -51,20 +53,21 @@
                 <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск: имя (Регина), тикет, ошибки..." oninput="applyFilters()">
             </div>
         </div>
-        <div class="row g-2">
+
+        <div class="row g-2 mb-3">
             <div class="col-md-2">
                 <select id="filter-pnl" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyFilters()">
                     <option value="">Все результаты</option>
-                    <option value="win">🟢 Только Профит (Тейки)</option>
-                    <option value="loss">🔴 Только Убыток (Стопы)</option>
+                    <option value="win">🟢 Только Профит</option>
+                    <option value="loss">🔴 Только Убыток</option>
                 </select>
             </div>
             <div class="col-md-3">
                 <select id="filter-trend" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyFilters()">
                     <option value="">Любой макро-тренд</option>
-                    <option value="Лонговый">📈 Лонговый (Bullish)</option>
-                    <option value="Шортовый">📉 Шортовый (Bearish)</option>
-                    <option value="Боковик">↔️ Боковик (Range)</option>
+                    <option value="Лонговый">📈 Лонговый</option>
+                    <option value="Шортовый">📉 Шортовый</option>
+                    <option value="Боковик">↔️ Боковик</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -72,11 +75,23 @@
                     <option value="">Любая логика входа</option>
                     <option value="По тренду">✅ По тренду</option>
                     <option value="Разворот">🔄 Разворот</option>
-                    <option value="От нижней границы">📈 От нижней границы (Боковик)</option>
-                    <option value="От верхней границы">📉 От верхней границы (Боковик)</option>
-                    <option value="Тест/Ошибка">🔧 Техническая (Тест)</option>
+                    <option value="От нижней границы">📈 От нижней границы</option>
+                    <option value="От верхней границы">📉 От верхней границы</option>
+                    <option value="Тест/Ошибка">🔧 Техническая</option>
                     <option value="Чужая сделка">👽 Чужая сделка</option>
                 </select>
+            </div>
+            <div class="col-md-2">
+                <input type="text" id="filter-symbol" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Актив (XAUUSD)" oninput="applyFilters()">
+            </div>
+            <div class="col-md-2">
+                <input type="text" id="filter-magic" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Magic Number" oninput="applyFilters()">
+            </div>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-12 text-end">
+                <button class="btn btn-sm btn-success fw-bold" onclick="exportToExcel()">📊 Экспорт в Excel (CSV)</button>
             </div>
         </div>
     </div>
@@ -85,9 +100,12 @@
 <div class="card shadow"><div class="card-body p-0"><div class="table-responsive">
     <table class="table table-dark table-hover m-0 align-middle">
         <thead><tr>
-            <th class="ps-3">Дата / Тикет</th>
-            <th>Направление</th>
-            <th>PnL ($)</th>
+            <th class="ps-3" style="width: 40px;">
+                <input type="checkbox" class="form-check-input bg-dark border-secondary" id="selectAllCb" onchange="toggleAllCb(this)">
+            </th>
+            <th>Дата / Тикет</th>
+            <th>Направление / Ассет</th>
+            <th>PnL ($) / Magic</th>
             <th>Статус Разбора / Контекст</th>
             <th>Скрин / Действия</th>
         </tr></thead>
@@ -105,10 +123,7 @@
             <div class="modal-body p-4" style="background-color: #121212;">
 
                 <div id="trade-context-header" class="mb-4"></div>
-
-                <div id="unified-feed" class="mb-5">
-                    <div class="text-center text-muted mt-5">Загрузка данных...</div>
-                </div>
+                <div id="unified-feed" class="mb-5"><div class="text-center text-muted mt-5">Загрузка данных...</div></div>
 
                 <hr class="border-secondary mt-5 mb-4">
                 <h5 class="text-center text-light mb-4">Добавить материалы к сделке</h5>
@@ -177,11 +192,37 @@
         </div>
     </div>
 </div>
+
+<div class="offcanvas offcanvas-end bg-dark text-light border-start border-secondary" tabindex="-1" id="rulesOffcanvas" style="width: 450px;">
+    <div class="offcanvas-header border-bottom border-secondary bg-black">
+        <h5 class="offcanvas-title text-info">🧠 Моя Торговая Конституция</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column p-0" style="font-size: 0.9rem;">
+
+        <div id="constitution-container" class="flex-grow-1 overflow-auto p-3">
+            <div class="text-center text-muted mt-5 spinner-border spinner-border-sm"></div>
+        </div>
+
+        <div class="border-top border-secondary p-3 bg-black mt-auto">
+            <h6 class="text-light small mb-2">➕ Добавить правило</h6>
+            <select id="new-const-cat" class="form-select form-select-sm bg-dark text-light border-secondary mb-2">
+                <option value="rev_entry">🔄 Вход: РАЗВОРОТ</option>
+                <option value="trend_entry">✅ Вход: ПО ТРЕНДУ</option>
+                <option value="psy_base">🛑 ПСИХОЛОГИЯ И БАЗА</option>
+            </select>
+            <textarea id="new-const-text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2" rows="3" placeholder="Напиши новое правило (напр: Обязательно смещение на М1...)"></textarea>
+            <button class="btn btn-info btn-sm w-100 fw-bold text-dark" onclick="addConstRule()">Сохранить правило</button>
+        </div>
+
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
     let allTradesData = [];
+    let currentFilteredTrades = [];
     let reviewModal;
     let currentReviewTradeId = null;
     let fileState = { 'my': null, 'rs': null };
@@ -189,7 +230,85 @@
     document.addEventListener("DOMContentLoaded", () => {
         reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
         setupSmartDropzones();
+        loadConstitution(); // Загружаем базу правил при старте
     });
+
+    // --- ЛОГИКА ТОРГОВОЙ КОНСТИТУЦИИ ---
+    async function loadConstitution() {
+        try {
+            const res = await fetch(API_BASE + 'rules/');
+            if(!res.ok) return;
+            const rules = await res.json();
+
+            const container = document.getElementById('constitution-container');
+
+            let revs = rules.filter(r => r.category === 'rev_entry');
+            let trends = rules.filter(r => r.category === 'trend_entry');
+            let psy = rules.filter(r => r.category === 'psy_base');
+
+            let html = '';
+
+            if (revs.length > 0) {
+                html += `<h6 class="text-warning fw-bold border-bottom border-warning pb-1">🔄 Правила входа: РАЗВОРОТ</h6>
+                         <ul class="text-muted ps-3 mb-4">`;
+                revs.forEach(r => html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteConstRule(${r.id})" title="Удалить">✖</span></li>`);
+                html += `</ul>`;
+            }
+
+            if (trends.length > 0) {
+                html += `<h6 class="text-success fw-bold border-bottom border-success pb-1">✅ Правила входа: ПО ТРЕНДУ</h6>
+                         <ul class="text-muted ps-3 mb-4">`;
+                trends.forEach(r => html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteConstRule(${r.id})" title="Удалить">✖</span></li>`);
+                html += `</ul>`;
+            }
+
+            if (psy.length > 0) {
+                html += `<h6 class="text-danger fw-bold border-bottom border-danger pb-1 mt-4">🛑 ПСИХОЛОГИЯ И БАЗА</h6>
+                         <div class="alert bg-danger bg-opacity-10 border-danger text-light p-3 mb-2 small">
+                         <ul class="mb-0 ps-3">`;
+                psy.forEach(r => html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteConstRule(${r.id})" title="Удалить">✖</span></li>`);
+                html += `</ul></div>`;
+            }
+
+            if(revs.length === 0 && trends.length === 0 && psy.length === 0) {
+                html = '<div class="text-center text-muted mt-5 pt-5 small">База правил пуста.<br>Выбери категорию внизу и добавь свои первые правила! 👇</div>';
+            }
+
+            container.innerHTML = html;
+        } catch (e) { console.error("Ошибка загрузки правил", e); }
+    }
+
+    async function addConstRule() {
+        const cat = document.getElementById('new-const-cat').value;
+        const text = document.getElementById('new-const-text').value.trim();
+        if(!text) return alert("Введите текст правила!");
+
+        const btn = event.target;
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(API_BASE + 'rules/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ category: cat, text: text })
+            });
+            btn.disabled = false;
+
+            if(res.ok) {
+                document.getElementById('new-const-text').value = '';
+                loadConstitution();
+            } else { alert("Ошибка сохранения"); }
+        } catch(e) { btn.disabled = false; }
+    }
+
+    async function deleteConstRule(id) {
+        if(confirm("Точно удалить это правило?")) {
+            await fetch(API_BASE + `rules/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') }});
+            loadConstitution();
+        }
+    }
+
+    // --- ОСТАЛЬНОЙ КОД ДНЕВНИКА (Без изменений) ---
     async function uploadCSV() {
         const fileInput = document.getElementById('csv-upload');
         const file = fileInput.files[0];
@@ -197,28 +316,14 @@
 
         const fd = new FormData();
         fd.append('file', file);
-
-        // Берем смещение брокера из настроек твоего профиля (по умолчанию 3)
         const brokerOffset = localStorage.getItem('broker_tz_offset') || "3";
         fd.append('broker_offset', brokerOffset);
 
         alert("Загружаем историю сделок... Пожалуйста, подождите.");
 
-        const res = await fetch(API_BASE + 'trades/upload_history/', {
-            method: 'POST',
-            body: fd,
-            headers: { 'X-CSRFToken': getCookie('csrftoken') }
-        });
-
+        const res = await fetch(API_BASE + 'trades/upload_history/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
         const data = await res.json();
-
-        if(res.ok) {
-            alert(data.message);
-            fileInput.value = ''; // Очищаем форму, чтобы можно было загрузить еще раз
-            initPage(); // Мгновенно обновляем таблицу Дневника
-        } else {
-            alert("Ошибка импорта: " + data.error);
-        }
+        if(res.ok) { alert(data.message); fileInput.value = ''; initPage(); } else { alert("Ошибка импорта: " + data.error); }
     }
 
     async function initPage() {
@@ -232,12 +337,11 @@
         applyFilters();
     }
 
-    function renderStats(data) { /* тут твой код дашборда, если он есть */ }
+    function renderStats(data) { /* код дашборда */ }
 
-    // 👇 ФУНКЦИЯ ФИЛЬТРАЦИИ ОБНОВЛЕНА ДЛЯ РАБОТЫ СО ВРЕМЕНЕМ И РАЗБОРОМ 👇
     function applyFilters() {
         const typeVal = document.getElementById('filter-type').value;
-        const pnlVal = document.getElementById('filter-pnl').value; // 👈 ВЗЯЛИ ФИЛЬТР PnL ВМЕСТО TF
+        const pnlVal = document.getElementById('filter-pnl').value;
         const searchVal = document.getElementById('filter-search').value.toLowerCase();
         const trendVal = document.getElementById('filter-trend').value;
         const logicVal = document.getElementById('filter-logic').value;
@@ -245,6 +349,8 @@
         const exactDateVal = document.getElementById('filter-exact-date').value;
         const reviewVal = document.getElementById('filter-review').value;
 
+        const symbolVal = document.getElementById('filter-symbol').value.toUpperCase();
+        const magicVal = document.getElementById('filter-magic').value;
         const now = new Date();
 
         const filtered = allTradesData.filter(t => {
@@ -252,7 +358,6 @@
             const matchTrend = trendVal ? t.market_trend === trendVal : true;
             const matchLogic = logicVal ? t.entry_logic === logicVal : true;
 
-            // 👇 ЛОГИКА НОВОГО ФИЛЬТРА PnL 👇
             let matchPnl = true;
             if (pnlVal === 'win' && t.profit <= 0) matchPnl = false;
             if (pnlVal === 'loss' && t.profit >= 0) matchPnl = false;
@@ -261,7 +366,6 @@
 
             let matchDate = true;
             const tDate = new Date(t.time);
-
             if (exactDateVal) {
                 const localDateStr = tDate.getFullYear() + '-' + String(tDate.getMonth() + 1).padStart(2, '0') + '-' + String(tDate.getDate()).padStart(2, '0');
                 if (localDateStr !== exactDateVal) matchDate = false;
@@ -280,10 +384,13 @@
             if (reviewVal === 'with_review' && !hasReview) matchReview = false;
             if (reviewVal === 'no_review' && hasReview) matchReview = false;
 
-            // Возвращаем результат со всеми фильтрами (matchPnl вместо matchTf)
-            return matchType && matchPnl && matchTrend && matchLogic && matchSearch && matchDate && matchReview;
+            const matchSymbol = (t.symbol || '').toUpperCase().includes(symbolVal);
+            const matchMagic = (t.magic_number || '').toString().includes(magicVal);
+
+            return matchType && matchPnl && matchTrend && matchLogic && matchSearch && matchDate && matchReview && matchSymbol && matchMagic;
         });
 
+        currentFilteredTrades = filtered;
         renderTable(filtered);
     }
 
@@ -313,9 +420,14 @@
             if (t.screenshot_exit) screenBtn += `<a href="${t.screenshot_exit}" target="_blank" class="badge bg-info text-dark text-decoration-none me-1">Выход</a>`;
 
             html += `<tr style="${rowOpacity}">
-                <td class="ps-3 text-secondary small">${date}<br>#${t.ticket}</td>
-                <td>${tBadge}<br><small class="text-muted">Vol: ${t.volume}</small></td>
-                <td class="${pClass} fw-bold fs-5">$${t.profit}</td>
+                <td class="ps-3"><input type="checkbox" class="form-check-input bg-dark border-secondary trade-cb" value="${t.id}"></td>
+                <td class="text-secondary small">${date}<br>#${t.ticket}</td>
+                <td>${tBadge} <strong class="text-light">${t.symbol || ''}</strong><br><small class="text-muted">Vol: ${t.volume}</small></td>
+                <td>
+                    <span class="${pClass} fw-bold fs-5">$${t.profit}</span><br>
+                    <small class="text-muted">Magic: ${t.magic_number || 'Ручная'}</small>
+                    ${t.mt5_comment ? `<br><small class="text-secondary fst-italic">"${t.mt5_comment}"</small>` : ''}
+                </td>
                 <td>${reviewBadge}${contextText}</td>
                 <td>
                     <div class="d-flex gap-1">
@@ -326,7 +438,7 @@
                 </td>
             </tr>`;
         });
-        document.getElementById('trades-table-body').innerHTML = html || '<tr><td colspan="5" class="text-center py-4">Сделок нет.</td></tr>';
+        document.getElementById('trades-table-body').innerHTML = html || '<tr><td colspan="6" class="text-center py-4">Сделок нет.</td></tr>';
     }
 
     async function openReviewModal(id) {
@@ -340,7 +452,6 @@
         const extraFactors = factors.filter(f => !stdFactors.includes(f)).join(', ');
         const isSel = (val, field) => (t[field] === val) ? 'selected' : '';
 
-        // Формируем правильную шапку для окна разбора
         let topContext = `
             <div class="card bg-info bg-opacity-10 border-info p-3 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
@@ -441,17 +552,11 @@
         fd.append('psychology', document.getElementById('modal-psy').value);
         fd.append('setup_grade', document.getElementById('modal-grade').value);
         fd.append('strategy_name', '');
-        // 👇 НОВЫЕ ТРИ СТРОЧКИ: Записываем профит, если поле существует 👇
-        const profitEl = document.getElementById('modal-profit');
-        if (profitEl) {
-            fd.append('profit', profitEl.value);
-        }
 
-        const res = await fetch(`${API_BASE}trades/${id}/`, {
-            method: 'PATCH',
-            body: fd,
-            headers: { 'X-CSRFToken': getCookie('csrftoken') }
-        });
+        const profitEl = document.getElementById('modal-profit');
+        if (profitEl) { fd.append('profit', profitEl.value); }
+
+        const res = await fetch(`${API_BASE}trades/${id}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
 
         if(res.ok) {
             const btn = event.target;
@@ -463,9 +568,7 @@
                 btn.innerText = originalText;
             }, 2000);
             initPage();
-        } else {
-            alert("Ошибка при сохранении.");
-        }
+        } else { alert("Ошибка при сохранении."); }
     }
 
     async function deleteFeedItem(type, itemId) {
@@ -629,7 +732,6 @@
                 } else {
                     document.getElementById('rs-comment').value = '';
                     const tfSelectRs = document.getElementById('rs-tf');
-                    // 👇 АВТОПЕРЕКЛЮЧЕНИЕ RS ИСПРАВЛЕНО (ДОБАВЛЕНЫ D1 и H4) 👇
                     if (tfSelectRs.value === 'Общее') tfSelectRs.value = 'D1';
                     else if (tfSelectRs.value === 'D1') tfSelectRs.value = 'H4';
                     else if (tfSelectRs.value === 'H4') tfSelectRs.value = 'H1';
@@ -655,55 +757,39 @@
         }
     }
 
+    // --- ФУНКЦИИ ДЛЯ ЧЕКБОКСОВ И ЭКСПОРТА ---
+    function toggleAllCb(master) {
+        document.querySelectorAll('.trade-cb').forEach(cb => cb.checked = master.checked);
+    }
+
+    function exportToExcel() {
+        const checkboxes = document.querySelectorAll('.trade-cb:checked');
+        let dataToExport = [];
+
+        if (checkboxes.length > 0) {
+            const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            dataToExport = allTradesData.filter(t => selectedIds.includes(t.id));
+        } else {
+            dataToExport = currentFilteredTrades;
+        }
+
+        if (dataToExport.length === 0) return alert("Нет данных для экспорта!");
+
+        let csvContent = "\uFEFFТикет;Дата;Актив;Тип;Объем;PnL;Magic;MT5 Коммент;Тренд;Логика;Ранг\n";
+
+        dataToExport.forEach(t => {
+            const date = new Date(t.time).toLocaleString('ru-RU').replace(',', '');
+            const profitStr = (t.profit || 0).toString().replace('.', ',');
+            const volStr = (t.volume || 0).toString().replace('.', ',');
+
+            csvContent += `${t.ticket};${date};${t.symbol || ''};${t.type};${volStr};${profitStr};${t.magic_number || ''};${t.mt5_comment || ''};${t.market_trend || ''};${t.entry_logic || ''};${t.setup_grade || ''}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "trades_export.csv";
+        link.click();
+    }
 </script>
-
-<div class="offcanvas offcanvas-end bg-dark text-light border-start border-secondary" tabindex="-1" id="rulesOffcanvas" style="width: 450px;">
-    <div class="offcanvas-header border-bottom border-secondary bg-black">
-        <h5 class="offcanvas-title text-info">🧠 Моя Торговая Конституция</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
-    </div>
-    <div class="offcanvas-body" style="font-size: 0.9rem;">
-
-        <h6 class="text-warning fw-bold border-bottom border-warning pb-1">🔄 Правила входа: РАЗВОРОТ</h6>
-        <ul class="text-muted ps-3 mb-4">
-            <li>Снятие значимого пула ликвидности, свинга (1M, 1W, 1D, 4H, 1H) или сессий.</li>
-            <li>Нахождение цены в HTF зоне интереса (ОБ, ББ, МБ, FVG).</li>
-            <li>Свип локальной ликвидности.</li>
-            <li>Импульсное смещение с имбалансом на M1.</li>
-            <li>Слом структуры (MSS) M5 -> M1.</li>
-            <li>Наличие фигуры STB-BTS на M1.</li>
-            <li>Синхронизация ТФ согласно контекста и тренда.</li>
-            <li>Понимание границ PD Array HTF (не ниже M15) для постановки стопа и тейка (R:R > 3).</li>
-            <li>Вход на тесте имбаланса M1-M5, на первом ОБ или на propulsion (втором ОБ, как подтверждение).</li>
-        </ul>
-
-        <h6 class="text-success fw-bold border-bottom border-success pb-1">✅ Правила входа: ПО ТРЕНДУ</h6>
-        <ul class="text-muted ps-3 mb-4">
-            <li>Понимание границ PD Array для определения текущего тренда.</li>
-            <li>Обязательно должна быть цель на HTF (несобранный пул ликвидности или зона интереса).</li>
-            <li>Вход строго в Premium/Discount зоне согласно направлению тренда.</li>
-            <li>Обязательно смещение на M1 с имбалансом.</li>
-            <li>Смотрим структуру Order Flow (ОФ) и снятие ликвидности, чтобы самому не стать ликвидностью.</li>
-            <li>Определяем силу или слабость текущего ОФ.</li>
-            <li>Синхронизация таймфреймов по ОФ.</li>
-            <li>Вход на откате, на тесте имбаланса M1-M5-M15.</li>
-        </ul>
-
-        <h6 class="text-danger fw-bold border-bottom border-danger pb-1">🛑 ПСИХОЛОГИЯ И БАЗА</h6>
-        <div class="alert bg-danger bg-opacity-10 border-danger text-light p-2 mb-2">
-            <strong>Перестаешь понимать график?</strong><br>
-            Закрывай терминал либо на день, либо пока цена не снимет таргеты, которые ты наметил при первоначальном анализе. Садись за график только с чистой головой.
-        </div>
-        <div class="alert bg-danger bg-opacity-10 border-danger text-light p-2 mb-2">
-            <strong>Получил пару стопов?</strong><br>
-            Не впадай в состояние "мне надо отбить прямо сейчас". Даже если таргеты определены верно, цена может идти к ним мерзко и нудно. Жди их снятия или снятия противоположных пулов.
-        </div>
-        <div class="alert bg-warning bg-opacity-10 border-warning text-light p-2 mb-2">
-            <strong>Ты торгуешь ВЕРОЯТНОСТИ!</strong><br>
-            Заходи только там, где вероятности на твоей стороне (где факторов "ЗА" гораздо больше, чем "ПРОТИВ"). Адекватно следуй анализу и применяй всё, чему учился. Без отсебятины!
-        </div>
-
-    </div>
-</div>
-
 {% endblock %}

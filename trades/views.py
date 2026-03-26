@@ -1,5 +1,7 @@
 import requests
+from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
+from django.shortcuts import render
 from rest_framework import viewsets, serializers, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
@@ -8,12 +10,12 @@ from django.db.models import Sum, Q, Count
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep
+from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, FAQBlock, FAQTopic
 import csv
 from datetime import datetime, timedelta
 import pytz
 import base64
-from .serializers import TradeSerializer # <--- ДОБАВИТЬ ЭТУ СТРОКУ
+from .serializers import TradeSerializer, FAQBlockSerializer, FAQTopicSerializer  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
 import random
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
@@ -459,3 +461,48 @@ class TradingRuleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+@login_required
+def faq_view(request):
+    return render(request, 'faq.html')
+
+# 👇 А это добавь в конец файла (API ViewSets):
+class FAQTopicViewSet(viewsets.ModelViewSet):
+    serializer_class = FAQTopicSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return FAQTopic.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class FAQBlockViewSet(viewsets.ModelViewSet):
+    serializer_class = FAQBlockSerializer
+    queryset = FAQBlock.objects.all()
+
+    def create(self, request):
+        try:
+            topic_id = request.data.get('topic_id')
+            text = request.data.get('text', '')
+            image_file = request.FILES.get('image')
+            image_url = request.data.get('image_url')
+
+            # Скачиваем скриншот TradingView, если прислали ссылку
+            if image_url and not image_file:
+                import requests
+                from django.core.files.base import ContentFile
+                import random
+                resp = requests.get(image_url)
+                if resp.status_code == 200:
+                    file_name = f"faq_tv_{random.randint(1000, 9999)}.png"
+                    image_file = ContentFile(resp.content, name=file_name)
+
+            block = FAQBlock.objects.create(
+                topic_id=topic_id,
+                text=text,
+                image=image_file
+            )
+            return Response({'status': 'Блок добавлен', 'id': block.id})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)

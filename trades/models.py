@@ -21,6 +21,7 @@ class Trade(models.Model):
     market_trend = models.CharField(max_length=50, blank=True, null=True)  # Лонг, Шорт, Боковик
     entry_logic = models.CharField(max_length=50, blank=True, null=True)  # По тренду, Разворот (Контр-тренд)
 
+
     confluence_factors = models.CharField(max_length=255, blank=True, null=True)
 
     comment = models.TextField(blank=True, null=True)
@@ -37,6 +38,10 @@ class Trade(models.Model):
     auto_screen_h1 = models.ImageField(upload_to='trades/auto/', blank=True, null=True)
     auto_screen_h4 = models.ImageField(upload_to='trades/auto/', blank=True, null=True)  # НОВОЕ
     auto_screen_d1 = models.ImageField(upload_to='trades/auto/', blank=True, null=True)  # НОВОЕ
+
+    # 👇 НОВЫЕ ПОЛЯ ДЛЯ MT5 👇
+    magic_number = models.CharField("Magic Number", max_length=50, blank=True, null=True)
+    mt5_comment = models.CharField("MT5 Комментарий", max_length=255, blank=True, null=True)
 
     def __str__(self):
         return f"{self.ticket} - {self.symbol}"
@@ -88,11 +93,18 @@ class PlaybookPattern(models.Model):
     def __str__(self):
         return f"{self.market_trend} | {self.entry_logic} - {self.title}"
 
+
 class TradingRule(models.Model):
     CATEGORY_CHOICES = [
+        # Категории для Дзена Трейдера (Плейбук)
         ('mantra', '📜 Мантра'),
         ('rule', '💎 Золотое правило'),
-        ('warning', '⚠️ Признак тильта')
+        ('warning', '⚠️ Признак тильта'),
+
+        # 👇 НОВЫЕ КАТЕГОРИИ ДЛЯ КОНСТИТУЦИИ (Дневник) 👇
+        ('rev_entry', '🔄 Вход: Разворот'),
+        ('trend_entry', '✅ Вход: По тренду'),
+        ('psy_base', '🛑 Психология и База')
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.CharField("Категория", max_length=20, choices=CATEGORY_CHOICES, default='rule')
@@ -101,3 +113,18 @@ class TradingRule(models.Model):
 
     def __str__(self):
         return f"{self.get_category_display()} - {self.user.username}"
+
+class FAQTopic(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.CharField("Рубрика", max_length=100)
+    question = models.CharField("Вопрос / Тема", max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.question
+
+class FAQBlock(models.Model):
+    topic = models.ForeignKey(FAQTopic, related_name='blocks', on_delete=models.CASCADE)
+    text = models.TextField("Текст ответа", blank=True, null=True)
+    image = models.ImageField("Скриншот", upload_to='faq/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)

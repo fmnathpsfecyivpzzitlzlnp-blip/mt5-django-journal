@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    .smart-dropzone:focus { border-color: #0dcaf0 !important; background-color: rgba(13, 202, 240, 0.1) !important; box-shadow: 0 0 15px rgba(13, 202, 240, 0.2); }
+    .faq-category-header { background: linear-gradient(90deg, #1a1a1a, #2a2a2a, #1a1a1a); border-bottom: 2px solid #0dcaf0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="text-light">📚 База Знаний (FAQ)</h4>
+    <button class="btn btn-info fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#addTopicModal">➕ Новый вопрос</button>
+</div>
+
+<div id="faq-container" class="accordion accordion-flush bg-dark border border-secondary rounded shadow-sm">
+    <div class="text-center text-muted p-5">Загрузка базы знаний...</div>
+</div>
+
+<div class="modal fade" id="addTopicModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-info">Добавить новую тему</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <label class="small text-secondary mb-1">Рубрика (Категория)</label>
+                <input type="text" id="topic-category" class="form-control bg-dark text-light border-secondary mb-3" placeholder="Напр: Ликвидность, Психология, Сетапы...">
+                
+                <label class="small text-secondary mb-1">Суть вопроса / Тема</label>
+                <input type="text" id="topic-question" class="form-control bg-dark text-light border-secondary" placeholder="Как правильно выделять BSL?">
+            </div>
+            <div class="modal-footer border-secondary">
+                <button class="btn btn-info w-100 fw-bold text-dark" onclick="createTopic()">Создать тему</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let faqData = [];
+    let currentUploadTopicId = null;
+    let faqFile = null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        loadFAQ();
+    });
+
+    async function loadFAQ() {
+        const res = await fetch(API_BASE + 'faq_topics/');
+        faqData = await res.json();
+        renderFAQ();
+    }
+
+    function renderFAQ() {
+        const container = document.getElementById('faq-container');
+        if (faqData.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted p-5">База пуста. Добавь первый вопрос!</div>';
+            return;
+        }
+
+        // Группируем по рубрикам
+        const grouped = {};
+        faqData.forEach(t => {
+            if (!grouped[t.category]) grouped[t.category] = [];
+            grouped[t.category].push(t);
+        });
+
+        let html = '';
+        for (const [category, topics] of Object.entries(grouped)) {
+            html += `<div class="faq-category-header p-3 text-info fw-bold fs-5">${category}</div>`;
+            
+            topics.forEach(t => {
+                html += `
+                <div class="accordion-item bg-dark border-bottom border-secondary">
+                    <h2 class="accordion-header" id="heading-${t.id}">
+                        <button class="accordion-button collapsed bg-dark text-light fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${t.id}">
+                            ❓ ${t.question}
+                        </button>
+                    </h2>
+                    <div id="collapse-${t.id}" class="accordion-collapse collapse" data-bs-parent="#faq-container">
+                        <div class="accordion-body bg-black text-light p-4">
+                            <div class="mb-4">
+                                ${t.blocks.length === 0 ? '<div class="text-muted small">Ответов пока нет.</div>' : ''}
+                                ${t.blocks.map(b => `
+                                    <div class="card bg-dark border-secondary mb-3">
+                                        ${b.image ? `<img src="${b.image}" class="card-img-top border-bottom border-secondary" style="max-height: 400px; object-fit: contain; cursor: pointer;" onclick="window.open('${b.image}')">` : ''}
+                                        ${b.text ? `<div class="card-body p-3"><p class="m-0 text-light" style="white-space: pre-wrap;">${b.text}</p></div>` : ''}
+                                        <div class="card-footer p-1 bg-dark text-end border-top border-secondary">
+                                            <button class="btn btn-sm btn-link text-danger py-0 text-decoration-none" onclick="deleteBlock(${b.id})">Удалить блок</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <div class="card bg-info bg-opacity-10 border-info p-3">
+                                <h6 class="text-info small mb-3">➕ Добавить ответ / скриншот к этой теме:</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div id="dropzone-${t.id}" tabindex="0" class="smart-dropzone p-3 text-center rounded position-relative" style="border: 2px dashed #0dcaf0; outline: none; cursor: default; min-height: 100px;">
+                                            <span id="drop-text-${t.id}" class="text-muted small d-block py-2">
+                                                🖱️ <b>Кликни сюда и нажми Ctrl+V</b><br>или вставь ссылку TradingView
+                                            </span>
+                                            <input type="file" id="file-input-${t.id}" class="d-none" accept="image/*">
+                                            <div id="preview-container-${t.id}" class="d-none mt-2 position-relative">
+                                                <img id="preview-img-${t.id}" src="" class="img-fluid rounded border border-info" style="max-height: 150px; object-fit: contain;">
+                                                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 py-0 px-2" onclick="clearDropzone(${t.id}, event)">✖</button>
+                                            </div>
+                                        </div>
+                                        <input type="text" id="url-input-${t.id}" class="form-control form-control-sm bg-dark text-light border-info mt-2" placeholder="Или ссылка TradingView...">
+                                    </div>
+                                    <div class="col-md-6 d-flex flex-column">
+                                        <textarea id="text-input-${t.id}" class="form-control form-control-sm bg-dark text-light border-info flex-grow-1 mb-2" placeholder="Текст ответа / пояснение..."></textarea>
+                                        <button class="btn btn-info btn-sm fw-bold w-100" onclick="addBlock(${t.id})">Сохранить в базу</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end mt-3">
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteTopic(${t.id})">🗑️ Удалить всю тему</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        }
+        container.innerHTML = html;
+        setupAllDropzones();
+    }
+
+    async function createTopic() {
+        const cat = document.getElementById('topic-category').value.trim() || 'Разное';
+        const q = document.getElementById('topic-question').value.trim();
+        if(!q) return alert("Введи вопрос!");
+
+        const res = await fetch(API_BASE + 'faq_topics/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ category: cat, question: q })
+        });
+        
+        if(res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('addTopicModal')).hide();
+            document.getElementById('topic-question').value = '';
+            loadFAQ();
+        }
+    }
+
+    async function deleteTopic(id) {
+        if(confirm("Удалить тему и ВСЕ ответы в ней?")) {
+            await fetch(API_BASE + `faq_topics/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            loadFAQ();
+        }
+    }
+
+    async function deleteBlock(id) {
+        if(confirm("Удалить этот блок ответа?")) {
+            await fetch(API_BASE + `faq_blocks/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            loadFAQ();
+        }
+    }
+
+    // --- ЛОГИКА SMART DROPZONE ---
+    let filesDict = {};
+
+    function setupAllDropzones() {
+        faqData.forEach(t => {
+            const dropzone = document.getElementById(`dropzone-${t.id}`);
+            const urlInput = document.getElementById(`url-input-${t.id}`);
+            if(!dropzone) return;
+
+            dropzone.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const items = (e.clipboardData || window.clipboardData).items;
+                for (let index in items) {
+                    let item = items[index];
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        setPreview(t.id, item.getAsFile());
+                        break; 
+                    } else if (item.kind === 'string' && item.type === 'text/plain') {
+                        item.getAsString(text => {
+                            if (text.includes('tradingview.com/x/')) { 
+                                urlInput.value = text; 
+                                setPreview(t.id, text); 
+                            }
+                        });
+                    }
+                }
+            });
+
+            urlInput.addEventListener('input', (e) => { 
+                if (e.target.value.includes('tradingview.com/x/')) setPreview(t.id, e.target.value); 
+            });
+        });
+    }
+
+    function setPreview(topicId, fileOrUrl) {
+        const previewContainer = document.getElementById(`preview-container-${topicId}`);
+        const previewImg = document.getElementById(`preview-img-${topicId}`);
+        const dropText = document.getElementById(`drop-text-${topicId}`);
+
+        if (typeof fileOrUrl === 'string') { 
+            previewImg.src = fileOrUrl; 
+            filesDict[topicId] = null; 
+        } else { 
+            previewImg.src = URL.createObjectURL(fileOrUrl); 
+            filesDict[topicId] = fileOrUrl; 
+            document.getElementById(`url-input-${topicId}`).value = ''; 
+        }
+
+        previewContainer.classList.remove('d-none');
+        dropText.classList.add('d-none');
+    }
+
+    function clearDropzone(topicId, event) {
+        if(event) event.stopPropagation(); 
+        filesDict[topicId] = null; 
+        document.getElementById(`url-input-${topicId}`).value = ''; 
+        document.getElementById(`preview-container-${topicId}`).classList.add('d-none');
+        document.getElementById(`drop-text-${topicId}`).classList.remove('d-none');
+        document.getElementById(`preview-img-${topicId}`).src = '';
+    }
+
+    async function addBlock(topicId) {
+        const fd = new FormData();
+        fd.append('topic_id', topicId);
+        fd.append('text', document.getElementById(`text-input-${topicId}`).value);
+        
+        const urlValue = document.getElementById(`url-input-${topicId}`).value;
+        const file = filesDict[topicId];
+
+        if (file) { fd.append('image', file); } 
+        else if (urlValue) { fd.append('image_url', urlValue); }
+
+        if(!fd.get('text') && !file && !urlValue) return alert("Добавь текст или картинку!");
+
+        const res = await fetch(API_BASE + 'faq_blocks/', {
+            method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        });
+
+        if(res.ok) {
+            clearDropzone(topicId);
+            document.getElementById(`text-input-${topicId}`).value = '';
+            loadFAQ();
+        } else {
+            alert('Ошибка при добавлении ответа.');
+        }
+    }
+</script>
+{% endblock %}
