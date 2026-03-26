@@ -76,6 +76,33 @@ class TradeViewSet(viewsets.ModelViewSet):
     serializer_class = TradeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    @action(detail=False, methods=['post'])
+    def cleanup_empty_trades(self, request):
+        try:
+            # Ищем пустые сделки ТОЛЬКО для текущего пользователя
+            trades_to_delete = Trade.objects.filter(user=request.user).exclude(
+                entry_logic='Чужая сделка'
+            ).annotate(
+                mentor_count=Count('mentor_reviews'),
+                my_screens_count=Count('analysis_screens')
+            ).filter(
+                mentor_count=0,
+                my_screens_count=0
+            )
+
+            count = trades_to_delete.count()
+
+            if count == 0:
+                return Response({"message": "База уже чиста! Пустых сделок не найдено."})
+
+            # Удаляем их
+            trades_to_delete.delete()
+
+            return Response({"message": f"✅ Успешно очищено! Удалено пустых сделок: {count} шт."})
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
     def get_queryset(self):
         qs = Trade.objects.filter(user=self.request.user).order_by('-time')
         is_processed = self.request.query_params.get('is_processed')
@@ -402,6 +429,10 @@ def mt5_webhook(request):
     time_str = request.data.get('time')
     broker_offset_seconds = request.data.get('broker_offset', 10800)
 
+    # 👇 Убрали коварные запятые в конце 👇
+    magic_number = request.data.get('magic', '')
+    mt5_comment = request.data.get('mt5_comment', '')
+
     # Достаем все 5 картинок из запроса
     screenshot_exit = request.data.get('screenshot_exit')
     screen_m1 = request.data.get('auto_screen_m1')
@@ -425,7 +456,11 @@ def mt5_webhook(request):
         trade = Trade.objects.create(
             user=user, ticket=ticket, symbol=symbol, type=trade_type,
             volume=float(volume), entry_price=float(entry_price), profit=float(profit),
-            time=utc_time, strategy_name="Новая из MT5", is_processed=False
+            time=utc_time, strategy_name="Новая из MT5", is_processed=False,
+
+            # 👇 ПЕРЕДАЕМ ПЕРЕМЕННЫЕ ПРЯМО В БАЗУ 👇
+            magic_number=magic_number,
+            mt5_comment=mt5_comment
         )
 
         # Вспомогательная функция для сохранения base64 картинок
@@ -443,10 +478,10 @@ def mt5_webhook(request):
         save_b64_image(screen_m5, trade.auto_screen_m5, f"m5_{ticket}.png")
         save_b64_image(screen_m15, trade.auto_screen_m15, f"m15_{ticket}.png")
         save_b64_image(screen_h1, trade.auto_screen_h1, f"h1_{ticket}.png")
-        save_b64_image(screen_h4, trade.auto_screen_h4, f"h4_{ticket}.png")  # НОВОЕ
-        save_b64_image(screen_d1, trade.auto_screen_d1, f"d1_{ticket}.png")  # НОВОЕ
+        save_b64_image(screen_h4, trade.auto_screen_h4, f"h4_{ticket}.png")
+        save_b64_image(screen_d1, trade.auto_screen_d1, f"d1_{ticket}.png")
 
-        trade.save() # Записываем все изменения в БД
+        trade.save()  # Записываем все изменения в БД
 
         return Response({"message": "Сделка и скриншоты успешно загружены!"}, status=201)
     except Exception as e:

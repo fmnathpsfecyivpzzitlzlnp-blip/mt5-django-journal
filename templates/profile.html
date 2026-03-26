@@ -26,6 +26,19 @@
 
             <button class="btn btn-primary w-100 fw-bold" onclick="saveProfile()">💾 Сохранить настройки</button>
         </div>
+        <div class="card bg-dark border-danger mt-4 shadow">
+            <div class="card-header bg-danger bg-opacity-25 border-danger text-danger fw-bold">
+                ⚠️ Опасная зона (Управление базой)
+            </div>
+            <div class="card-body">
+                <p class="text-light small">
+                    Вы можете массово удалить все "пустые" сделки из вашей базы. Это навсегда удалит все сделки, у которых <b>нет ваших скриншотов</b>, <b>нет разбора от ментора</b> и которые <b>не помечены как "Чужая сделка"</b>.
+                </p>
+                <button class="btn btn-outline-danger fw-bold" onclick="cleanupEmptyTrades(event)">
+                    🗑️ Очистить базу от пустых сделок
+                </button>
+            </div>
+        </div>
 
         <div class="card shadow p-4 border border-warning bg-dark">
             <h5 class="text-warning mb-3">API Подключение (MT5)</h5>
@@ -48,5 +61,44 @@
         localStorage.setItem('broker_tz_offset', document.getElementById('broker-tz').value);
         alert("Настройки успешно сохранены!");
     }
+
+    async function cleanupEmptyTrades(event) {
+        // Запрашиваем подтверждение
+        if (!confirm("ВНИМАНИЕ! Это действие необратимо.\n\nВы уверены, что хотите удалить все неразобранные сделки?")) {
+            return;
+        }
+
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Удаление...";
+
+        try {
+            // Отправляем запрос на наш новый эндпоинт
+            const res = await fetch(API_BASE + 'trades/cleanup_empty_trades/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') // Обязательно передаем токен безопасности
+                }
+            });
+
+            const data = await res.json();
+
+            btn.disabled = false;
+            btn.innerText = originalText;
+
+            if (res.ok) {
+                alert(data.message); // Покажет "Успешно очищено! Удалено: 250 шт."
+            } else {
+                alert("❌ Ошибка: " + data.error);
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerText = originalText;
+            alert("❌ Ошибка сети");
+        }
+    }
 </script>
+
 {% endblock %}
