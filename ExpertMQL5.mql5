@@ -218,6 +218,8 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             json += "\"password\":\"" + InpPassword + "\",";
             json += "\"ticket\":\"" + IntegerToString(ticket) + "\",";
             json += "\"symbol\":\"" + symbol + "\",";
+            json += "\"magic\":\"" + IntegerToString(OrderGetInteger(ORDER_MAGIC)) + "\","; // 👈 ВОТ ТАК
+            json += "\"mt5_comment\":\"" + HistoryDealGetString(ticket, DEAL_COMMENT) + "\",";
             json += "\"type\":\"" + posType + "\",";
             json += "\"volume\":\"" + DoubleToString(volume, 2) + "\",";
             json += "\"entry_price\":\"" + DoubleToString(price, 5) + "\",";

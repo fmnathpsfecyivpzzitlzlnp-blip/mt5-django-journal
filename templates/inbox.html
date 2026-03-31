@@ -1,11 +1,25 @@
 {% extends "base.html" %}
 
+{% block extra_head %}
+<style>
+    .smart-dropzone:focus { border-color: #ffc107 !important; background-color: rgba(255, 193, 7, 0.1) !important; box-shadow: 0 0 15px rgba(255, 193, 7, 0.2); }
+    .smart-dropzone-danger:focus { border-color: #dc3545 !important; background-color: rgba(220, 53, 69, 0.1) !important; box-shadow: 0 0 15px rgba(220, 53, 69, 0.2); }
+    .resizable-image-container { resize: vertical; overflow: hidden; height: 280px; min-height: 100px; border-bottom: 1px solid #444; background: #000; position: relative; }
+    .resizable-image-container img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
+
+    /* Стили для кликабельной шапки таблицы */
+    th.sortable { cursor: pointer; transition: background 0.2s; user-select: none; }
+    th.sortable:hover { background-color: #333; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <button class="btn btn-outline-warning fw-bold me-2" onclick="new bootstrap.Modal(document.getElementById('manualTradeModal')).show()">➕ Чужая сделка</button>
     <h4 class="text-light">📥 Необработанные сделки (Inbox)</h4>
     <button class="btn btn-primary fw-bold" onclick="processSelectedTrades()">Отправить в Дневник ➡️</button>
 </div>
+
 <div class="modal fade" id="manualTradeModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark border-warning">
@@ -53,9 +67,9 @@
         </div>
     </div>
 </div>
+
 <div class="card shadow p-3 mb-4 border-primary">
     <h6 class="text-primary mb-3">🧩 Массовая разметка (Контекст и Психология)</h6>
-
     <div class="row g-2 mb-3">
         <div class="col-md-3">
             <label class="small text-secondary">Макро-Тренд</label>
@@ -81,8 +95,8 @@
             <select id="bulk-psy" class="form-select form-select-sm bg-dark text-light border-secondary">
                 <option value="">-- Не выбрано --</option>
                 <option value="Идеально по плану">🟢 Идеально по плану</option>
-                <option value="FOMO (Жадность)">🟡 FOMO (Жадность / Боялся упустить)</option>
-                <option value="Страх (Неуверенность)">🟠 Страх (Неуверенность / Рано вышел)</option>
+                <option value="FOMO (Жадность)">🟡 FOMO (Жадность)</option>
+                <option value="Страх (Неуверенность)">🟠 Страх (Неуверенность)</option>
                 <option value="Тильт (Отыгрыш)">🔴 Тильт (Попытка отыграться)</option>
             </select>
         </div>
@@ -96,7 +110,6 @@
             </select>
         </div>
     </div>
-
     <div class="row g-2">
         <div class="col-md-12">
             <label class="small text-secondary">Общий комментарий к выделенным сделкам</label>
@@ -115,31 +128,44 @@
                 <option value="SELL">SELL</option>
             </select>
         </div>
-        <div class="col-md-4">
-            <label class="small text-secondary mb-1">Поиск (Тикет или Объем)</label>
-            <input type="text" id="inbox-filter-search" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Напр: 1.12 или #1463..." oninput="applyInboxFilters()">
+        <div class="col-md-2">
+            <label class="small text-secondary mb-1">Поиск (Тикет, Объем)</label>
+            <input type="text" id="inbox-filter-search" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Напр: 1.12..." oninput="applyInboxFilters()">
         </div>
-        <div class="col-md-3">
+
+        <div class="col-md-2">
+            <label class="small text-info mb-1">Мэджик</label>
+            <input type="text" id="inbox-filter-magic" class="form-control form-control-sm bg-dark text-light border-info" placeholder="ID советника" oninput="applyInboxFilters()">
+        </div>
+        <div class="col-md-2">
+            <label class="small text-warning mb-1">Комментарий</label>
+            <input type="text" id="inbox-filter-comment" class="form-control form-control-sm bg-dark text-light border-warning" placeholder="Текст коммента" oninput="applyInboxFilters()">
+        </div>
+
+        <div class="col-md-2">
             <label class="small text-secondary mb-1">Дата (От)</label>
             <input type="date" id="inbox-filter-date-from" class="form-control form-control-sm bg-dark text-light border-secondary" onchange="applyInboxFilters()">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label class="small text-secondary mb-1">Дата (До)</label>
             <input type="date" id="inbox-filter-date-to" class="form-control form-control-sm bg-dark text-light border-secondary" onchange="applyInboxFilters()">
         </div>
     </div>
 </div>
+
 <div class="card shadow">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-dark table-hover align-middle m-0">
-                <thead>
+                <thead class="position-sticky top-0 bg-black" style="z-index: 1;">
                     <tr>
-                        <th class="ps-3"><input type="checkbox" id="select-all" class="form-check-input" onclick="toggleAll(this)"></th>
-                        <th>Дата / Тикет</th>
-                        <th>Скриншот</th>
-                        <th>Направление</th>
-                        <th>PnL ($)</th>
+                        <th class="ps-3"><input type="checkbox" id="select-all" class="form-check-input bg-dark border-secondary" onclick="toggleAll(this)"></th>
+                        <th class="sortable text-info" id="th-time" onclick="sortTable('time')">Дата / Тикет ↕️</th>
+                        <th class="sortable text-info" id="th-symbol" onclick="sortTable('symbol')">Ассет ↕️</th>
+                        <th class="sortable text-info" id="th-profit" onclick="sortTable('profit')">PnL ($) ↕️</th>
+                        <th class="sortable text-info" id="th-magic_number" onclick="sortTable('magic_number')">Мэджик 🤖 ↕️</th>
+                        <th class="sortable text-info" id="th-mt5_comment" onclick="sortTable('mt5_comment')">Коммент 💬 ↕️</th>
+                        <th>Скриншоты</th>
                         <th>Действия</th>
                     </tr>
                 </thead>
@@ -148,66 +174,140 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="reviewModal" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
+        <div class="modal-content bg-dark border-secondary">
+            <div class="modal-header border-secondary bg-black">
+                <h5 class="modal-title text-light">🔬 Экспресс-Разбор: Сделка #<span id="rev-ticket" class="text-info"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" style="background-color: #121212;">
+                <div id="trade-context-header" class="mb-4"></div>
+                <hr class="border-secondary mt-4 mb-4">
+
+                <div class="row g-4">
+                    <div class="col-md-12">
+                        <div class="card bg-secondary bg-opacity-10 border-warning p-3 h-100 shadow">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="text-warning m-0">🤷‍♂️ Добавить свой скриншот анализа</h6>
+                                <select id="my-tf" class="form-select form-select-sm bg-dark text-warning border-secondary w-auto fw-bold">
+                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option><option value="Вход">Вход</option>
+                                </select>
+                            </div>
+                            <div id="my-dropzone" tabindex="0" class="smart-dropzone p-3 mb-2 text-center rounded position-relative" style="border: 2px dashed #ffc107; outline: none; cursor: default;">
+                                <span id="my-drop-text" class="text-muted small d-block">
+                                    🖱️ <b>Кликни сюда (зона подсветится)</b><br>и нажми <b>Ctrl+V</b><br><br>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('my-file-input').click();">📁 Выбрать файл</button>
+                                </span>
+                                <input type="file" id="my-file-input" class="d-none" accept="image/*">
+                                <div id="my-preview-container" class="d-none mt-2 position-relative">
+                                    <img id="my-preview-img" src="" class="img-fluid rounded border border-secondary" style="max-height: 200px; object-fit: contain;">
+                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" onclick="clearSmartInput('my', event)">✖</button>
+                                </div>
+                            </div>
+                            <input type="text" id="my-url-input" class="form-control form-control-sm bg-dark text-light border-secondary mb-2" placeholder="Или вставь ссылку TradingView">
+                            <textarea id="my-desc" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Моя логика... (Что я ждал?)" rows="3"></textarea>
+                            <button class="btn btn-warning mt-2 w-100 fw-bold" onclick="submitAnalysis('my')">Отправить анализ и перенести в Дневник</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
     let inboxTrades = [];
+    let currentSort = { column: 'time', asc: false }; // Состояние сортировки
 
     async function initPage() {
         const res = await fetch(API_BASE + 'trades/?is_processed=false');
         inboxTrades = await res.json();
-
-        // Вместо прямого рендера вызываем фильтрацию (чтобы при обновлении страницы фильтры не сбрасывались)
         applyInboxFilters();
-
-        if (typeof updateNavBadges === 'function') updateNavBadges();
     }
 
-    // 👇 НОВАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ 👇
+    // 👇 ФУНКЦИЯ СОРТИРОВКИ ПО КЛИКУ 👇
+    function sortTable(col) {
+        if (currentSort.column === col) {
+            currentSort.asc = !currentSort.asc;
+        } else {
+            currentSort.column = col;
+            currentSort.asc = (col === 'profit'); // PnL по умолчанию по убыванию
+        }
+
+        // Обновляем стрелочки
+        document.querySelectorAll('th.sortable').forEach(th => th.innerHTML = th.innerHTML.replace(' 🔼', ' ↕️').replace(' 🔽', ' ↕️'));
+        const activeTh = document.getElementById(`th-${col}`);
+        if(activeTh) activeTh.innerHTML = activeTh.innerHTML.replace(' ↕️', currentSort.asc ? ' 🔼' : ' 🔽');
+
+        applyInboxFilters();
+    }
+
+    // 👇 ФУНКЦИЯ ФИЛЬТРАЦИИ И СОРТИРОВКИ 👇
     function applyInboxFilters() {
         const typeVal = document.getElementById('inbox-filter-type').value;
         const searchVal = document.getElementById('inbox-filter-search').value.toLowerCase();
+
+        // Значения новых фильтров
+        const magicVal = document.getElementById('inbox-filter-magic').value.toLowerCase();
+        const commentVal = document.getElementById('inbox-filter-comment').value.toLowerCase();
+
         const dateFrom = document.getElementById('inbox-filter-date-from').value;
         const dateTo = document.getElementById('inbox-filter-date-to').value;
 
         const filtered = inboxTrades.filter(t => {
-            // Фильтр по направлению
             const matchType = typeVal ? t.type === typeVal : true;
-
-            // Фильтр по тексту (Тикет или Объем)
             const matchSearch = (
                 (t.ticket || '').toString().toLowerCase().includes(searchVal) ||
-                (t.volume || '').toString().toLowerCase().includes(searchVal)
+                (t.volume || '').toString().toLowerCase().includes(searchVal) ||
+                (t.symbol || '').toString().toLowerCase().includes(searchVal)
             );
 
-            // Фильтр по дате
+            // Фильтруем Мэджик и Коммент
+            const matchMagic = (t.magic_number || '').toString().toLowerCase().includes(magicVal);
+            const matchComment = (t.mt5_comment || '').toLowerCase().includes(commentVal);
+
             let matchDate = true;
             if (dateFrom || dateTo) {
                 const tDate = new Date(t.time);
-                tDate.setHours(0,0,0,0); // Сбрасываем время для точного сравнения дат
-
+                tDate.setHours(0,0,0,0);
                 if (dateFrom) {
-                    const fromObj = new Date(dateFrom);
-                    fromObj.setHours(0,0,0,0);
+                    const fromObj = new Date(dateFrom); fromObj.setHours(0,0,0,0);
                     if (tDate < fromObj) matchDate = false;
                 }
                 if (dateTo) {
-                    const toObj = new Date(dateTo);
-                    toObj.setHours(0,0,0,0);
+                    const toObj = new Date(dateTo); toObj.setHours(0,0,0,0);
                     if (tDate > toObj) matchDate = false;
                 }
             }
 
-            return matchType && matchSearch && matchDate;
+            return matchType && matchSearch && matchDate && matchMagic && matchComment;
         });
 
-        // Снимаем общую галочку "Выбрать все" при изменении фильтров
-        document.getElementById('select-all').checked = false;
+        // Применяем сортировку
+        filtered.sort((a, b) => {
+            let valA = a[currentSort.column];
+            let valB = b[currentSort.column];
 
+            if (currentSort.column === 'time') { valA = new Date(valA).getTime(); valB = new Date(valB).getTime(); }
+            else if (currentSort.column === 'profit') { valA = parseFloat(valA) || 0; valB = parseFloat(valB) || 0; }
+            else { valA = (valA || '').toString().toLowerCase(); valB = (valB || '').toString().toLowerCase(); }
+
+            if (valA < valB) return currentSort.asc ? -1 : 1;
+            if (valA > valB) return currentSort.asc ? 1 : -1;
+            return 0;
+        });
+
+        document.getElementById('select-all').checked = false;
         renderInbox(filtered);
     }
 
+    // 👇 ОТРИСОВКА ТАБЛИЦЫ 👇
+    // 👇 ОТРИСОВКА ТАБЛИЦЫ (БЕЗ КНОПКИ РАЗБОР) 👇
     function renderInbox(trades) {
         let html = '';
         trades.forEach(t => {
@@ -225,25 +325,41 @@
             if (t.screenshot_exit) screenBtn += `<a href="${t.screenshot_exit}" target="_blank" class="badge bg-info text-dark text-decoration-none me-1">Выход</a>`;
             if (!screenBtn) screenBtn = '<span class="text-muted small">Нет скринов</span>';
 
+            const magicInfo = (t.magic_number && t.magic_number !== "0") ? `<span class="text-info fw-bold">${t.magic_number}</span>` : `<span class="text-muted small">-</span>`;
+            const commentInfo = t.mt5_comment ? `<span class="badge bg-secondary text-light">${t.mt5_comment}</span>` : `<span class="text-muted small">-</span>`;
+
             html += `<tr>
-                <td class="ps-3"><input type="checkbox" class="form-check-input trade-checkbox" value="${t.id}"></td>
-                <td class="text-secondary small">${date}<br>#${t.ticket}</td>
+                <td class="ps-3"><input type="checkbox" class="form-check-input trade-checkbox bg-dark border-secondary" value="${t.id}"></td>
+                <td class="text-secondary small">${date}<br><span class="text-muted">#${t.ticket}</span></td>
+                <td>${tBadge} <strong class="text-light">${t.symbol || ''}</strong><br><small class="text-muted">Vol: ${t.volume}</small></td>
+                <td class="${pClass} fw-bold fs-5">$${t.profit}</td>
+                <td>${magicInfo}</td>
+                <td>${commentInfo}</td>
                 <td>${screenBtn}</td>
-                <td>${tBadge}<br><small class="text-muted">Vol: ${t.volume}</small></td>
-                <td class="${pClass} fw-bold">$${t.profit}</td>
                 <td>
-                    <button onclick="deleteTrade(${t.id}, '${t.ticket}')" class="btn btn-sm btn-outline-danger" title="Удалить сделку навсегда">🗑️</button>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="markAsProcessedSingle(${t.id})" title="Отправить в Дневник">✅</button>
+                        <button onclick="deleteTrade(${t.id}, '${t.ticket}')" class="btn btn-sm btn-outline-danger" title="Удалить навсегда">🗑️</button>
+                    </div>
                 </td>
             </tr>`;
         });
-        document.getElementById('inbox-table-body').innerHTML = html || '<tr><td colspan="6" class="text-center py-4 text-secondary">Сделки не найдены</td></tr>';
+        document.getElementById('inbox-table-body').innerHTML = html || '<tr><td colspan="8" class="text-center py-5 text-secondary">Сделки не найдены</td></tr>';
     }
 
+    // --- Массовые действия ---
     function toggleAll(source) {
         let checkboxes = document.querySelectorAll('.trade-checkbox');
         for(let i=0; i<checkboxes.length; i++) checkboxes[i].checked = source.checked;
     }
 
+    async function markAsProcessedSingle(id) {
+        const fd = new FormData(); fd.append('is_processed', 'true');
+        await fetch(`${API_BASE}trades/${id}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+        initPage();
+    }
+
+    // 👇 ВОТ ЭТА ФУНКЦИЯ ПРОПАЛА, ТЕПЕРЬ ОНА НА МЕСТЕ 👇
     async function processSelectedTrades() {
         const selected = Array.from(document.querySelectorAll('.trade-checkbox:checked')).map(cb => parseInt(cb.value));
         if (selected.length === 0) return alert("Выберите хотя бы одну сделку!");
@@ -257,29 +373,41 @@
             comment: document.getElementById('bulk-comment').value
         };
 
-        const res = await fetch(API_BASE + 'trades/bulk_process/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-            body: JSON.stringify(payload)
-        });
+        const btn = event.target;
+        const origText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Отправка...";
 
-        if (res.ok) {
-            alert("✅ Сделки улетели в Дневник! Детальный разбор сделаете там.");
-            document.getElementById('bulk-grade').value = '';
-            document.getElementById('bulk-psy').value = '';
-            document.getElementById('bulk-comment').value = '';
-            document.getElementById('bulk-trend').value = '';
-            document.getElementById('bulk-logic').value = '';
+        try {
+            const res = await fetch(API_BASE + 'trades/bulk_process/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify(payload)
+            });
 
-            document.getElementById('select-all').checked = false;
-            initPage();
-        } else {
-            alert("Ошибка при переносе");
+            if (res.ok) {
+                alert("✅ Сделки успешно улетели в Дневник!");
+                document.getElementById('bulk-grade').value = '';
+                document.getElementById('bulk-psy').value = '';
+                document.getElementById('bulk-comment').value = '';
+                document.getElementById('bulk-trend').value = '';
+                document.getElementById('bulk-logic').value = '';
+
+                document.getElementById('select-all').checked = false;
+                initPage();
+            } else {
+                alert("Ошибка при переносе");
+            }
+        } catch(e) {
+            alert("Ошибка сети");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = origText;
         }
     }
 
     async function deleteTrade(id, ticket) {
-        if (confirm(`Вы уверены, что хотите удалить сделку #${ticket}? Это действие нельзя отменить.`)) {
+        if (confirm(`Точно удалить сделку #${ticket} навсегда?`)) {
             const res = await fetch(`${API_BASE}trades/${id}/`, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') }
@@ -288,21 +416,67 @@
         }
     }
 
+    // --- МОДАЛКА ЭКСПРЕСС-РАЗБОРА ---
+    async function openReviewModal(id) {
+        currentReviewTradeId = id; const t = allInboxData.find(trade => trade.id === id);
+        document.getElementById('rev-ticket').innerText = t.ticket;
+        const isSel = (val, field) => (t[field] === val) ? 'selected' : '';
+
+        let topContext = `
+            <div class="card bg-info bg-opacity-10 border-info p-3 shadow-sm">
+                <div class="row g-2">
+                    <div class="col-md-3"><label class="small text-secondary mb-1">Тренд</label><select id="modal-trend" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="Лонговый" ${isSel('Лонговый', 'market_trend')}>📈 Лонг</option><option value="Шортовый" ${isSel('Шортовый', 'market_trend')}>📉 Шорт</option><option value="Боковик" ${isSel('Боковик', 'market_trend')}>↔️ Боковик</option></select></div>
+                    <div class="col-md-3"><label class="small text-secondary mb-1">Логика</label><select id="modal-logic" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="По тренду" ${isSel('По тренду', 'entry_logic')}>✅ По тренду</option><option value="Разворот" ${isSel('Разворот', 'entry_logic')}>🔄 Разворот</option><option value="Тест/Ошибка" ${isSel('Тест/Ошибка', 'entry_logic')}>🔧 Тест</option><option value="Чужая сделка" ${isSel('Чужая сделка', 'entry_logic')}>👽 Чужая</option></select></div>
+                    <div class="col-md-3"><label class="small text-secondary mb-1">Психология</label><select id="modal-psy" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="Идеально по плану" ${isSel('Идеально по плану', 'psychology')}>🟢 План</option><option value="FOMO (Жадность)" ${isSel('FOMO (Жадность)', 'psychology')}>🟡 FOMO</option><option value="Тильт (Отыгрыш)" ${isSel('Тильт (Отыгрыш)', 'psychology')}>🔴 Тильт</option></select></div>
+                    <div class="col-md-3"><label class="small text-secondary mb-1">Ранг</label><select id="modal-grade" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="A+" ${isSel('A+', 'setup_grade')}>🔥 A+</option><option value="B" ${isSel('B', 'setup_grade')}>👍 B</option><option value="C" ${isSel('C', 'setup_grade')}>⚠️ C</option></select></div>
+                </div>
+            </div>`;
+        document.getElementById('trade-context-header').innerHTML = topContext;
+        clearSmartInput('my'); reviewModal.show();
+    }
+
+    // --- Dropzones ---
+    function setupSmartDropzones() { const dropzone = document.getElementById(`my-dropzone`); const fileInput = document.getElementById(`my-file-input`); const urlInput = document.getElementById(`my-url-input`); fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) setPreview(e.target.files[0], 'my'); }); dropzone.addEventListener('paste', (e) => { e.preventDefault(); const items = (e.clipboardData || window.clipboardData).items; for (let index in items) { let item = items[index]; if (item.kind === 'file' && item.type.startsWith('image/')) { setPreview(item.getAsFile(), 'my'); } else if (item.kind === 'string' && item.type === 'text/plain') { item.getAsString(text => { if (text.includes('tradingview.com/x/')) { urlInput.value = text; setPreview(text, 'my'); } }); } } }); urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPreview(e.target.value, 'my'); }); }
+    function setPreview(fileOrUrl, prefix) { const previewContainer = document.getElementById(`${prefix}-preview-container`); const previewImg = document.getElementById(`${prefix}-preview-img`); const dropText = document.getElementById(`${prefix}-drop-text`); if (typeof fileOrUrl === 'string') { previewImg.src = fileOrUrl; fileState[prefix] = null; } else { previewImg.src = URL.createObjectURL(fileOrUrl); fileState[prefix] = fileOrUrl; document.getElementById(`${prefix}-url-input`).value = ''; } previewContainer.classList.remove('d-none'); dropText.classList.add('d-none'); }
+    function clearSmartInput(prefix, event) { if(event) event.stopPropagation(); fileState[prefix] = null; document.getElementById(`${prefix}-file-input`).value = ''; document.getElementById(`${prefix}-url-input`).value = ''; document.getElementById(`${prefix}-preview-container`).classList.add('d-none'); document.getElementById(`${prefix}-drop-text`).classList.remove('d-none'); document.getElementById(`${prefix}-preview-img`).src = ''; }
+
+    async function submitAnalysis(type) {
+        const fd = new FormData(); const urlValue = document.getElementById(`my-url-input`).value;
+        if (fileState[type]) { fd.append('image', fileState[type]); } else if (urlValue) { fd.append('image_url', urlValue); }
+
+        fd.append('timeframe', document.getElementById('my-tf').value);
+        fd.append('description', document.getElementById('my-desc').value);
+
+        fd.append('market_trend', document.getElementById('modal-trend').value);
+        fd.append('entry_logic', document.getElementById('modal-logic').value);
+        fd.append('psychology', document.getElementById('modal-psy').value);
+        fd.append('setup_grade', document.getElementById('modal-grade').value);
+        fd.append('is_processed', 'true');
+
+        const btn = event.target; btn.disabled = true; btn.innerText = "Загрузка...";
+        try {
+            await fetch(`${API_BASE}trades/${currentReviewTradeId}/add_analysis_screen/`, { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }});
+            await fetch(`${API_BASE}trades/${currentReviewTradeId}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }});
+
+            btn.disabled = false; btn.innerText = "Успешно!";
+            reviewModal.hide();
+            initPage();
+        } catch(e) { btn.disabled = false; btn.innerText = "Ошибка"; }
+    }
+
     async function submitManualTrade() {
         const payload = {
             author: document.getElementById('man-author').value || 'Unknown',
             type: document.getElementById('man-type').value,
             symbol: document.getElementById('man-symbol').value,
-            date: document.getElementById('man-date').value,  // 👈 ВОТ ЗДЕСЬ НЕ ХВАТАЛО ЗАПЯТОЙ!
+            date: document.getElementById('man-date').value,
             profit: document.getElementById('man-profit').value
         };
 
         if (!payload.date) return alert("Укажи дату сделки!");
 
-        const btn = event.target;
-        const origText = btn.innerText;
-        btn.disabled = true;
-        btn.innerText = "Создание...";
+        const btn = event.target; const origText = btn.innerText;
+        btn.disabled = true; btn.innerText = "Создание...";
 
         try {
             const res = await fetch(`${API_BASE}trades/add_manual/`, {
@@ -311,23 +485,17 @@
                 body: JSON.stringify(payload)
             });
 
-            btn.disabled = false;
-            btn.innerText = origText;
-
+            btn.disabled = false; btn.innerText = origText;
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
                 document.getElementById('man-date').value = '';
                 initPage();
             } else {
-                const err = await res.json();
-                alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
+                const err = await res.json(); alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
             }
         } catch (e) {
-            btn.disabled = false;
-            btn.innerText = origText;
-            alert("Ошибка сети");
+            btn.disabled = false; btn.innerText = origText; alert("Ошибка сети");
         }
     }
-
 </script>
 {% endblock %}

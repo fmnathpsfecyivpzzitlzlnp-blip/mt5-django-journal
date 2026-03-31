@@ -1,9 +1,30 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📊 Аналитика & Проп-Трекер</h4>
     <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#propSettings">⚙️ Настройки Счета</button>
+</div>
+
+<div class="card shadow p-2 mb-4 border-secondary bg-dark">
+    <div class="row g-2">
+        <div class="col-md-3">
+            <input type="text" id="filt-symbol" class="form-control bg-dark text-light border-secondary" placeholder="Ассет (напр. XAUUSD)" oninput="applyFilters()">
+        </div>
+        <div class="col-md-3">
+            <input type="text" id="filt-magic" class="form-control bg-dark text-light border-secondary" placeholder="Советник (Magic Number)" oninput="applyFilters()">
+        </div>
+        <div class="col-md-3">
+            <input type="text" id="filt-comment" class="form-control bg-dark text-light border-secondary" placeholder="Комментарий MT5" oninput="applyFilters()">
+        </div>
+        <div class="col-md-3">
+            <select id="filt-period" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
+                <option value="all">📅 За все время</option>
+                <option value="month">🗓️ Последние 30 дней</option>
+                <option value="week">⏳ Последние 7 дней</option>
+            </select>
+        </div>
+    </div>
 </div>
 
 <div class="row mb-4 g-2">
@@ -94,7 +115,7 @@
 </div>
 
 <div class="card mb-4 p-3 shadow">
-    <h5 class="text-light mb-3 text-center">Календарь Прибыльности (Последние 30 дней)</h5>
+    <h5 class="text-light mb-3 text-center">Календарь Прибыльности</h5>
     <div class="d-flex flex-wrap justify-content-center gap-2" id="heatmap-container"></div>
 </div>
 
@@ -107,13 +128,6 @@
         <div class="card p-3 shadow">
             <h6 class="text-center text-secondary mb-3">PnL по часам (В вашей временной зоне)</h6>
             <canvas id="sessionChart" style="max-height: 300px;"></canvas>
-
-            <div class="mt-4 text-center d-flex flex-wrap justify-content-center gap-2">
-                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">🌙 Азия (23:00-04:00)</span>
-                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">☕ Лондон (06:00-10:00)</span>
-                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">🗽 NY AM (11:00-16:00)</span>
-                <span class="badge px-3 py-2" style="background-color: #2c2c2c; border: 1px solid #555;">🏙️ NY PM (17:00-21:00)</span>
-            </div>
         </div>
     </div>
 </div>
@@ -125,45 +139,22 @@
     let logicChartInstance, tfChartInstance, sessionChartInstance, psyChartInstance, equityChartInstance;
     let allTrades = [];
 
-    // Настройки для графиков под темную тему
     Chart.defaults.color = '#adb5bd';
     Chart.defaults.borderColor = '#444';
 
     async function initPage() {
-        // Загружаем настройки пропа
         document.getElementById('prop-bal').value = localStorage.getItem('prop_bal') || 100000;
         document.getElementById('prop-target').value = localStorage.getItem('prop_target') || 8;
         document.getElementById('prop-dl').value = localStorage.getItem('prop_dl') || 5;
         document.getElementById('prop-dd').value = localStorage.getItem('prop_dd') || 10;
 
-        const tzOffset = localStorage.getItem('user_tz_offset') || "+3";
+        const res = await fetch(API_BASE + 'trades/?is_processed=true');
+        const rawTrades = await res.json();
 
-        // Грузим стату с бэкенда
-        const statsRes = await fetch(API_BASE + `trades/stats/?tz_offset=${tzOffset}`);
-        const statsData = await statsRes.json();
-
-        // Заполняем быстрые карточки метрик
-        if (statsData.overview) {
-            document.getElementById('stat-winrate').innerText = `${statsData.overview.winrate_percent}%`;
-            document.getElementById('stat-rr').innerText = `1 : ${statsData.overview.rr_ratio}`;
-            document.getElementById('stat-win-streak').innerText = statsData.overview.max_win_streak;
-            document.getElementById('stat-loss-streak').innerText = statsData.overview.max_loss_streak;
-        }
-
-        renderCharts(statsData);
-
-        // Грузим все сделки для Equity и Heatmap
-        const tradesRes = await fetch(API_BASE + 'trades/?is_processed=true');
-        const rawTrades = await tradesRes.json();
-
-        // 👇 ВАЖНО: Фильтруем сделки, убирая тесты и чужие разборы 👇
         allTrades = rawTrades.filter(t => t.entry_logic !== 'Тест/Ошибка' && t.entry_logic !== 'Чужая сделка');
-
-        // Сортируем сделки от старых к новым для правильного графика
         allTrades.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-        renderHeatmap(allTrades);
-        calculatePropTracker(allTrades);
+        applyFilters(); // Сразу применяем фильтры и отрисовываем
     }
 
     function savePropSettings() {
@@ -171,111 +162,140 @@
         localStorage.setItem('prop_target', document.getElementById('prop-target').value);
         localStorage.setItem('prop_dl', document.getElementById('prop-dl').value);
         localStorage.setItem('prop_dd', document.getElementById('prop-dd').value);
-        calculatePropTracker(allTrades);
+        applyFilters();
+    }
+
+    // 👇 ГЛАВНАЯ ФУНКЦИЯ ДИНАМИЧЕСКОГО ФИЛЬТРА 👇
+    function applyFilters() {
+        let sym = document.getElementById('filt-symbol').value.toLowerCase();
+        let mag = document.getElementById('filt-magic').value.toLowerCase();
+        let com = document.getElementById('filt-comment').value.toLowerCase();
+        let per = document.getElementById('filt-period').value;
+        let now = new Date();
+
+        let filtered = allTrades.filter(t => {
+            let sMatch = (t.symbol || '').toLowerCase().includes(sym);
+            let mMatch = (t.magic_number || '').toString().toLowerCase().includes(mag);
+            let cMatch = (t.mt5_comment || '').toLowerCase().includes(com);
+
+            let dMatch = true;
+            let td = new Date(t.time);
+            if(per === 'month') { let m = new Date(); m.setDate(now.getDate() - 30); if(td < m) dMatch = false; }
+            else if(per === 'week') { let w = new Date(); w.setDate(now.getDate() - 7); if(td < w) dMatch = false; }
+
+            return sMatch && mMatch && cMatch && dMatch;
+        });
+
+        updateTopStats(filtered);
+        calculatePropTracker(filtered);
+        renderHeatmap(filtered);
+        updateCharts(filtered);
+    }
+
+    function updateTopStats(trades) {
+        let wins = 0, loss = 0;
+        let grossWin = 0, grossLoss = 0;
+        let currWinStr = 0, maxWinStr = 0;
+        let currLossStr = 0, maxLossStr = 0;
+
+        trades.forEach(t => {
+            if(t.profit > 0) {
+                wins++; grossWin += t.profit;
+                currWinStr++; currLossStr = 0;
+                if(currWinStr > maxWinStr) maxWinStr = currWinStr;
+            } else if (t.profit < 0) {
+                loss++; grossLoss += Math.abs(t.profit);
+                currLossStr++; currWinStr = 0;
+                if(currLossStr > maxLossStr) maxLossStr = currLossStr;
+            }
+        });
+
+        let wr = trades.length > 0 ? ((wins / trades.length) * 100).toFixed(2) : 0;
+        let avgWin = wins > 0 ? grossWin / wins : 0;
+        let avgLoss = loss > 0 ? grossLoss / loss : 0;
+        let rr = avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : 0;
+
+        document.getElementById('stat-winrate').innerText = `${wr}%`;
+        document.getElementById('stat-rr').innerText = `1 : ${rr}`;
+        document.getElementById('stat-win-streak').innerText = maxWinStr;
+        document.getElementById('stat-loss-streak').innerText = maxLossStr;
+    }
+
+    function updateCharts(trades) {
+        let logicMap = {}, tfMap = {}, hourMap = {}, psyMap = {};
+        trades.forEach(t => {
+            let l = t.entry_logic || 'Без логики'; logicMap[l] = (logicMap[l] || 0) + t.profit;
+            let tf = t.timeframe || 'N/A'; tfMap[tf] = (tfMap[tf] || 0) + t.profit;
+            let h = new Date(t.time).getHours() + ':00'; hourMap[h] = (hourMap[h] || 0) + t.profit;
+            let psy = t.psychology || 'Без метки'; psyMap[psy] = (psyMap[psy] || 0) + t.profit;
+        });
+
+        const mkChart = (inst, mapObj, ctxId) => {
+            if(inst) inst.destroy();
+            let labels = Object.keys(mapObj); let data = Object.values(mapObj);
+            return new Chart(document.getElementById(ctxId), {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ data: data, backgroundColor: data.map(v => v>=0 ? '#00e676':'#ff5252') }] },
+                options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } }
+            });
+        };
+
+        logicChartInstance = mkChart(logicChartInstance, logicMap, 'logicChart');
+        tfChartInstance = mkChart(tfChartInstance, tfMap, 'tfChart');
+        psyChartInstance = mkChart(psyChartInstance, psyMap, 'psyChart');
+
+        let sortedHours = Object.keys(hourMap).sort((a,b) => parseInt(a) - parseInt(b));
+        if(sessionChartInstance) sessionChartInstance.destroy();
+        sessionChartInstance = new Chart(document.getElementById('sessionChart'), {
+            type: 'bar',
+            data: { labels: sortedHours, datasets: [{ data: sortedHours.map(h => hourMap[h]), backgroundColor: sortedHours.map(h => hourMap[h]>=0 ? '#00e676':'#ff5252') }] },
+            options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } }
+        });
     }
 
     function calculatePropTracker(trades) {
         const startBal = parseFloat(document.getElementById('prop-bal').value);
-        const targetPct = parseFloat(document.getElementById('prop-target').value);
-        const dlPct = parseFloat(document.getElementById('prop-dl').value);
-        const ddPct = parseFloat(document.getElementById('prop-dd').value);
+        const targetUSD = startBal * (parseFloat(document.getElementById('prop-target').value) / 100);
+        const dlUSD = startBal * (parseFloat(document.getElementById('prop-dl').value) / 100);
+        const ddUSD = startBal * (parseFloat(document.getElementById('prop-dd').value) / 100);
 
-        const targetUSD = startBal * (targetPct / 100);
-        const dlUSD = startBal * (dlPct / 100);
-        const ddUSD = startBal * (ddPct / 100);
-
-        let currentEq = startBal;
-        let peakEq = startBal;
-        let maxDrawdownUSD = 0;
-        let totalPnL = 0;
-        let dailyPnL = 0;
-
-        // Определяем "сегодня" с учетом сдвига
+        let currentEq = startBal, peakEq = startBal, maxDrawdownUSD = 0, totalPnL = 0, dailyPnL = 0;
         const todayStr = new Date().toISOString().split('T')[0];
-
-        let eqData = [startBal];
-        let eqLabels = ['Start'];
+        let eqData = [startBal], eqLabels = ['Start'];
 
         trades.forEach(t => {
-            currentEq += t.profit;
-            totalPnL += t.profit;
-
-            eqData.push(currentEq);
-            eqLabels.push('#' + t.ticket);
-
-            // Считаем High Water Mark (Пик баланса)
+            currentEq += t.profit; totalPnL += t.profit;
+            eqData.push(currentEq); eqLabels.push('#' + t.ticket);
             if (currentEq > peakEq) peakEq = currentEq;
-
-            // Считаем текущую просадку от пика
             let currentDrawdown = peakEq - currentEq;
             if (currentDrawdown > maxDrawdownUSD) maxDrawdownUSD = currentDrawdown;
-
-            // Считаем профит за сегодня
-            if (t.time.startsWith(todayStr)) {
-                dailyPnL += t.profit;
-            }
+            if (t.time.startsWith(todayStr)) dailyPnL += t.profit;
         });
 
-        // 🏆 Обновляем ЦЕЛЬ
-        document.getElementById('text-target-usd').innerText = `$${targetUSD}`;
+        document.getElementById('text-target-usd').innerText = `$${targetUSD.toFixed(0)}`;
         let targetProgress = Math.min(100, Math.max(0, (totalPnL / targetUSD) * 100));
-        let barTarget = document.getElementById('bar-target');
-        barTarget.style.width = `${targetProgress}%`;
-        barTarget.innerText = `${targetProgress.toFixed(1)}%`;
+        document.getElementById('bar-target').style.width = `${targetProgress}%`;
+        document.getElementById('bar-target').innerText = `${targetProgress.toFixed(1)}%`;
         document.getElementById('text-target-left').innerText = `Осталось: $${Math.max(0, targetUSD - totalPnL).toFixed(2)}`;
 
-        // 📉 Обновляем ДНЕВНОЙ ЛИМИТ
-        document.getElementById('text-dl-usd').innerText = `$${dlUSD}`;
+        document.getElementById('text-dl-usd').innerText = `$${dlUSD.toFixed(0)}`;
         let dlProgress = dailyPnL < 0 ? Math.min(100, (Math.abs(dailyPnL) / dlUSD) * 100) : 0;
         let barDl = document.getElementById('bar-dl');
-        barDl.style.width = `${dlProgress}%`;
-        barDl.innerText = `${dlProgress.toFixed(1)}%`;
-        if(dlProgress > 80) barDl.classList.replace('bg-warning', 'bg-danger'); // Краснеет при опасности
-        else barDl.classList.replace('bg-danger', 'bg-warning');
+        barDl.style.width = `${dlProgress}%`; barDl.innerText = `${dlProgress.toFixed(1)}%`;
+        barDl.className = `progress-bar fw-bold text-dark ${dlProgress > 80 ? 'bg-danger' : 'bg-warning'}`;
         document.getElementById('text-dl-left').innerText = `PnL сегодня: $${dailyPnL.toFixed(2)}`;
 
-        // 💀 Обновляем МАКС ПРОСАДКУ
-        document.getElementById('text-dd-usd').innerText = `$${ddUSD}`;
+        document.getElementById('text-dd-usd').innerText = `$${ddUSD.toFixed(0)}`;
         let ddProgress = Math.min(100, (maxDrawdownUSD / ddUSD) * 100);
-        let barDd = document.getElementById('bar-dd');
-        barDd.style.width = `${ddProgress}%`;
-        barDd.innerText = `${ddProgress.toFixed(1)}%`;
+        document.getElementById('bar-dd').style.width = `${ddProgress}%`;
+        document.getElementById('bar-dd').innerText = `${ddProgress.toFixed(1)}%`;
         document.getElementById('text-dd-left').innerText = `Просадка от пика: $${maxDrawdownUSD.toFixed(2)}`;
 
-        // 📈 Отрисовка Equity Curve
         if(equityChartInstance) equityChartInstance.destroy();
         const ctx = document.getElementById('equityChart').getContext('2d');
-
-        // Градиент для красоты
         let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(0, 230, 118, 0.5)');
-        gradient.addColorStop(1, 'rgba(0, 230, 118, 0.0)');
-
-        equityChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: eqLabels,
-                datasets: [{
-                    label: 'Баланс ($)',
-                    data: eqData,
-                    borderColor: '#00e676',
-                    backgroundColor: gradient,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 2,
-                    pointBackgroundColor: '#fff'
-                }]
-            },
-            options: {
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { grid: { color: '#333' } },
-                    x: { display: false } // Прячем тикеты снизу, чтобы не засорять
-                },
-                interaction: { intersect: false, mode: 'index' }
-            }
-        });
+        gradient.addColorStop(0, 'rgba(0, 230, 118, 0.5)'); gradient.addColorStop(1, 'rgba(0, 230, 118, 0.0)');
+        equityChartInstance = new Chart(ctx, { type: 'line', data: { labels: eqLabels, datasets: [{ label: 'Баланс', data: eqData, borderColor: '#00e676', backgroundColor: gradient, borderWidth: 2, fill: true, tension: 0.2, pointRadius: 1 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } }, x: { display: false } }, interaction: { intersect: false, mode: 'index' } } });
     }
 
     function renderHeatmap(trades) {
@@ -283,24 +303,11 @@
         let html = '';
         for(let i=29; i>=0; i--) {
             let d = new Date(); d.setDate(d.getDate() - i); let ds = d.toISOString().split('T')[0]; let p = daily[ds] || 0;
-            let c = p > 0 ? `rgba(0, 230, 118, ${Math.min(0.2+p/1500, 1)})` : (p < 0 ? `rgba(255, 82, 82, ${Math.min(0.2+Math.abs(p)/1500, 1)})` : '#333');
+            let c = p > 0 ? `rgba(0, 230, 118, ${Math.min(0.2+p/1000, 1)})` : (p < 0 ? `rgba(255, 82, 82, ${Math.min(0.2+Math.abs(p)/1000, 1)})` : '#333');
             html += `<div class="heatmap-box" title="${ds} | $${p.toFixed(2)}" style="background-color: ${c}; width: 25px; height: 25px; border-radius: 4px;"></div>`;
         }
         document.getElementById('heatmap-container').innerHTML = html;
     }
-
-    function renderCharts(data) {
-        if(logicChartInstance) logicChartInstance.destroy();
-        if(tfChartInstance) tfChartInstance.destroy();
-        if(sessionChartInstance) sessionChartInstance.destroy();
-        if(psyChartInstance) psyChartInstance.destroy();
-
-        // Заменили setup на logic_stats
-        if(data.logic_stats) logicChartInstance = new Chart(document.getElementById('logicChart'), { type: 'bar', data: { labels: data.logic_stats.map(s => s.entry_logic||'N/A'), datasets: [{ label: 'PnL ($)', data: data.logic_stats.map(s => s.total_profit), backgroundColor: data.logic_stats.map(s => s.total_profit >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
-
-        if(data.by_timeframe) tfChartInstance = new Chart(document.getElementById('tfChart'), { type: 'bar', data: { labels: data.by_timeframe.map(t => t.timeframe||'N/A'), datasets: [{ label: 'PnL ($)', data: data.by_timeframe.map(t => t.pnl), backgroundColor: data.by_timeframe.map(t => t.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
-        if(data.by_hour) sessionChartInstance = new Chart(document.getElementById('sessionChart'), { type: 'bar', data: { labels: data.by_hour.map(h => h.hour), datasets: [{ label: 'PnL ($)', data: data.by_hour.map(h => h.pnl), backgroundColor: data.by_hour.map(h => h.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } }, x: { grid: { display: false } } } } });
-        if(data.by_psychology) psyChartInstance = new Chart(document.getElementById('psyChart'), { type: 'bar', data: { labels: data.by_psychology.map(p => p.psychology), datasets: [{ label: 'PnL ($)', data: data.by_psychology.map(p => p.pnl), backgroundColor: data.by_psychology.map(p => p.pnl >= 0 ? '#00e676' : '#ff5252') }] }, options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#333' } } } } });
-    }
+    document.addEventListener("DOMContentLoaded", initPage);
 </script>
 {% endblock %}

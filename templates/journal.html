@@ -54,7 +54,7 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск: тикет, магия, коммент MT5, актив..." oninput="applyFilters()">
+                <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск: тикет, актив..." oninput="applyFilters()">
             </div>
         </div>
 
@@ -86,10 +86,10 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <input type="text" id="filter-symbol" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Актив (XAUUSD)" oninput="applyFilters()">
+                <input type="text" id="filter-magic" class="form-control form-control-sm bg-dark text-info border-secondary" placeholder="Мэджик 🤖" oninput="applyFilters()">
             </div>
             <div class="col-md-2">
-                <input type="text" id="filter-magic" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Magic Number" oninput="applyFilters()">
+                <input type="text" id="filter-comment" class="form-control form-control-sm bg-dark text-warning border-secondary" placeholder="Коммент 💬" oninput="applyFilters()">
             </div>
         </div>
 
@@ -108,8 +108,10 @@
                 <input type="checkbox" class="form-check-input bg-dark border-secondary" id="selectAllCb" onchange="toggleAllCb(this)">
             </th>
             <th class="sortable text-info" id="th-time" onclick="sortTable('time')">Дата / Тикет ↕️</th>
-            <th class="sortable text-info" id="th-symbol" onclick="sortTable('symbol')">Направление / Ассет ↕️</th>
-            <th class="sortable text-info" id="th-profit" onclick="sortTable('profit')">PnL ($) / Советник ↕️</th>
+            <th class="sortable text-info" id="th-symbol" onclick="sortTable('symbol')">Ассет ↕️</th>
+            <th class="sortable text-info" id="th-profit" onclick="sortTable('profit')">PnL ($) ↕️</th>
+            <th class="sortable text-info" id="th-magic_number" onclick="sortTable('magic_number')">Мэджик 🤖 ↕️</th>
+            <th class="sortable text-info" id="th-mt5_comment" onclick="sortTable('mt5_comment')">Коммент 💬 ↕️</th>
             <th>Статус Разбора / Контекст</th>
             <th>Скрин / Действия</th>
         </tr></thead>
@@ -284,7 +286,6 @@
         if(confirm("Удалить?")) { await fetch(API_BASE + `rules/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') }}); loadConstitution(); }
     }
 
-    // --- ЛОГИКА ФИЛЬТРАЦИИ И СОРТИРОВКИ ДНЕВНИКА ---
     function saveFilterAndApply() {
         const val = document.getElementById('filter-date').value;
         localStorage.setItem('journal_default_period', val);
@@ -306,16 +307,14 @@
         applyFilters();
     }
 
-    function renderStats(data) {
-        // Заглушка, если ты используешь дашборд над таблицей
-    }
+    function renderStats(data) {}
 
     function sortTable(col) {
         if (currentSort.column === col) {
             currentSort.asc = !currentSort.asc;
         } else {
             currentSort.column = col;
-            currentSort.asc = (col === 'profit'); // Профит по умолчанию по убыванию
+            currentSort.asc = (col === 'profit');
         }
 
         document.querySelectorAll('th.sortable').forEach(th => th.innerHTML = th.innerHTML.replace(' 🔼', ' ↕️').replace(' 🔽', ' ↕️'));
@@ -334,8 +333,9 @@
         const dateVal = document.getElementById('filter-date').value;
         const exactDateVal = document.getElementById('filter-exact-date').value;
         const reviewVal = document.getElementById('filter-review').value;
-        const symbolVal = document.getElementById('filter-symbol').value.toUpperCase();
-        const magicVal = document.getElementById('filter-magic').value;
+
+        const magicVal = document.getElementById('filter-magic').value.toLowerCase();
+        const commentVal = document.getElementById('filter-comment').value.toLowerCase();
 
         const now = new Date();
 
@@ -347,9 +347,9 @@
             if (pnlVal === 'win' && t.profit <= 0) matchPnl = false;
             if (pnlVal === 'loss' && t.profit >= 0) matchPnl = false;
 
-            // Поиск с учетом всех полей
-            const searchSource = [t.ticket, t.strategy_name, t.comment, t.psychology, t.mt5_comment, t.magic_number].map(s => s || '').join(' ').toLowerCase();
-            const matchSearch = searchSource.includes(searchVal);
+            const matchSearch = ((t.ticket||'') + ' ' + (t.symbol||'')).toLowerCase().includes(searchVal);
+            const matchMagic = (t.magic_number || '').toString().toLowerCase().includes(magicVal);
+            const matchComment = (t.mt5_comment || '').toLowerCase().includes(commentVal);
 
             let matchDate = true;
             const tDate = new Date(t.time);
@@ -374,13 +374,9 @@
             if (reviewVal === 'with_review' && !hasReview) matchReview = false;
             if (reviewVal === 'no_review' && hasReview) matchReview = false;
 
-            const matchSymbol = (t.symbol || '').toUpperCase().includes(symbolVal);
-            const matchMagic = (t.magic_number || '').toString().includes(magicVal);
-
-            return matchType && matchPnl && matchTrend && matchLogic && matchSearch && matchDate && matchReview && matchSymbol && matchMagic;
+            return matchType && matchPnl && matchTrend && matchLogic && matchSearch && matchDate && matchReview && matchMagic && matchComment;
         });
 
-        // Сортировка массива перед отрисовкой
         filtered.sort((a, b) => {
             let valA = a[currentSort.column];
             let valB = b[currentSort.column];
@@ -434,15 +430,17 @@
             if (t.auto_screen_m1) screenBtn += `<a href="${t.auto_screen_m1}" target="_blank" class="badge bg-primary text-decoration-none me-1">M1</a>`;
             if (t.screenshot_exit) screenBtn += `<a href="${t.screenshot_exit}" target="_blank" class="badge bg-info text-dark text-decoration-none me-1">Выход</a>`;
 
-            const isEA = t.magic_number && t.magic_number !== "0" && t.magic_number !== "";
-            const eaInfo = isEA ? `<span class="text-info fw-bold">🤖 ${t.magic_number}</span>` : `<span class="text-muted">👤 Ручная</span>`;
-            const commentInfo = t.mt5_comment ? `<br><small class="text-secondary fst-italic" title="Комментарий MT5">${t.mt5_comment}</small>` : '';
+            const magicInfo = (t.magic_number && t.magic_number !== "0") ? `<span class="text-info fw-bold">${t.magic_number}</span>` : `<span class="text-muted small">-</span>`;
+            const commentInfo = t.mt5_comment ? `<span class="badge bg-secondary text-light">${t.mt5_comment}</span>` : `<span class="text-muted small">-</span>`;
 
+            // 👇 РЕНДЕР 8 СТОЛБЦОВ 👇
             html += `<tr style="${rowOpacity}">
                 <td class="ps-3"><input type="checkbox" class="form-check-input bg-dark border-secondary trade-cb" value="${t.id}"></td>
                 <td class="small">${finalDate}<br><span class="text-muted">#${t.ticket}</span></td>
                 <td>${tBadge} <strong class="text-light">${t.symbol || ''}</strong><br><small class="text-muted">Vol: ${t.volume}</small></td>
-                <td><span class="${pClass} fw-bold fs-5">$${t.profit}</span><br>${eaInfo}${commentInfo}</td>
+                <td><span class="${pClass} fw-bold fs-5">$${t.profit}</span></td>
+                <td>${magicInfo}</td>
+                <td>${commentInfo}</td>
                 <td>${reviewBadge}${contextText}</td>
                 <td>
                     <div class="d-flex gap-1">
@@ -453,7 +451,7 @@
                 </td>
             </tr>`;
         });
-        document.getElementById('trades-table-body').innerHTML = html || '<tr><td colspan="6" class="text-center py-4">Сделок нет.</td></tr>';
+        document.getElementById('trades-table-body').innerHTML = html || '<tr><td colspan="8" class="text-center py-4 text-muted">Сделок нет.</td></tr>';
     }
 
     // --- ЛОГИКА РАЗБОРА (Модалка) ---
