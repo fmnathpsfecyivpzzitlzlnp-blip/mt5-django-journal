@@ -1,0 +1,6 @@
+# Принудительно указываем языки для файлов
+*.mq5 linguist-language=MQL5
+*.mqh linguist-language=MQL5
+*.py linguist-language=Python
+*.html linguist-language=HTML
+*.css linguist-language=CSS
