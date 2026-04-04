@@ -5,22 +5,26 @@ from django.shortcuts import render
 from rest_framework import viewsets, serializers, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.db.models import Sum, Q, Count
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, FAQBlock, FAQTopic
+from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, FAQBlock, FAQTopic, UserQuizProgress, Question, \
+    AnswerChoice, Quiz, DailyBacktest
 import csv
 from datetime import datetime, timedelta
 import pytz
 import base64
-from .serializers import TradeSerializer, FAQBlockSerializer, FAQTopicSerializer  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
+from .serializers import TradeSerializer, FAQBlockSerializer, FAQTopicSerializer, \
+    QuestionSerializer, QuizSerializer  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
 import random
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 from .models import TradingRule
 from .serializers import TradingRuleSerializer
+from .models import DailyBacktest
+import json
 
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
@@ -75,6 +79,60 @@ class PlaybookViewSet(viewsets.ViewSet):
 class TradeViewSet(viewsets.ModelViewSet):
     serializer_class = TradeSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=['post'])
+    def copy_trade(self, request, pk=None):
+        import random
+        orig_trade = self.get_object()
+
+        # Генерируем новый тикет для копии
+        new_ticket = f"Копия_{orig_trade.ticket}_{random.randint(100, 999)}"
+
+        # 1. Создаем копию самой сделки
+        new_trade = Trade.objects.create(
+            user=orig_trade.user,
+            ticket=new_ticket,
+            symbol=orig_trade.symbol,
+            type=orig_trade.type,
+            volume=orig_trade.volume,
+            entry_price=orig_trade.entry_price,
+            profit=orig_trade.profit,
+            time=orig_trade.time,
+            strategy_name=orig_trade.strategy_name,
+            setup_grade=orig_trade.setup_grade,
+            market_trend=orig_trade.market_trend,
+            entry_logic=orig_trade.entry_logic,
+            confluence_factors=orig_trade.confluence_factors,
+            comment=orig_trade.comment,
+            psychology=orig_trade.psychology,
+            is_processed=orig_trade.is_processed,
+            magic_number=orig_trade.magic_number,
+            mt5_comment=orig_trade.mt5_comment,
+            screenshot_exit=orig_trade.screenshot_exit,
+            auto_screen_m1=orig_trade.auto_screen_m1,
+            auto_screen_m5=orig_trade.auto_screen_m5,
+            auto_screen_m15=orig_trade.auto_screen_m15,
+            auto_screen_h1=orig_trade.auto_screen_h1,
+            auto_screen_h4=orig_trade.auto_screen_h4,
+            auto_screen_d1=orig_trade.auto_screen_d1,
+        )
+
+        # 2. Копируем твои скрины анализа
+        for screen in orig_trade.analysis_screens.all():
+            TradeScreenshot.objects.create(
+                trade=new_trade, timeframe=screen.timeframe,
+                image=screen.image, description=screen.description
+            )
+
+        # 3. Копируем разборы RS
+        for review in orig_trade.mentor_reviews.all():
+            ReviewStep.objects.create(
+                trade=new_trade, step_order=review.step_order,
+                timeframe=review.timeframe, image=review.image,
+                mentor_comment=review.mentor_comment, error_type=review.error_type
+            )
+
+        return Response({"message": "Сделка и разбор успешно скопированы!"}, status=201)
 
     @action(detail=False, methods=['post'])
     def cleanup_empty_trades(self, request):
@@ -541,3 +599,119 @@ class FAQBlockViewSet(viewsets.ModelViewSet):
             return Response({'status': 'Блок добавлен', 'id': block.id})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_quizzes(request):
+    quizzes = Quiz.objects.all()
+    data = []
+    for q in quizzes:
+        progress, _ = UserQuizProgress.objects.get_or_create(user=request.user, quiz=q)
+        q_data = QuizSerializer(q).data
+        q_data['progress'] = {
+            'current_index': progress.current_question_index,
+            'correct_count': progress.correct_answers_count,
+            'is_completed': progress.is_completed
+        }
+        data.append(q_data)
+    return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_quiz_question(request, quiz_id):
+    progress = UserQuizProgress.objects.get(user=request.user, quiz_id=quiz_id)
+    questions = Question.objects.filter(quiz_id=quiz_id).order_by('order')
+
+    if progress.is_completed or progress.current_question_index >= questions.count():
+        if not progress.is_completed:
+            progress.is_completed = True
+            progress.save()
+        return Response({"completed": True, "score": progress.correct_answers_count, "total": questions.count()})
+
+    current_q = questions[progress.current_question_index]
+    return Response({
+        "completed": False,
+        "question": QuestionSerializer(current_q).data,
+        "total_questions": questions.count(),
+        "current_index": progress.current_question_index
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def submit_answer(request, quiz_id):
+    answer_id = request.data.get('answer_id')
+    progress = UserQuizProgress.objects.get(user=request.user, quiz_id=quiz_id)
+
+    try:
+        answer = AnswerChoice.objects.get(id=answer_id)
+        if answer.is_correct:
+            progress.correct_answers_count += 1
+
+        progress.current_question_index += 1
+        progress.save()
+        return Response({"is_correct": answer.is_correct, "next_index": progress.current_question_index})
+    except AnswerChoice.DoesNotExist:
+        return Response({"error": "Ответ не найден"}, status=400)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def backtest_grid_api(request):
+    date_str = request.GET.get('date') or request.data.get('date')
+
+    if request.method == 'GET':
+        # Если дату не передали — возвращаем ИСТОРИЮ ВСЕХ ДНЕЙ
+        if not date_str:
+            history = DailyBacktest.objects.filter(user=request.user).order_by('-date')
+            data = []
+            for h in history:
+                # Достаем оценку из JSON
+                day_res = h.grid_data.get('day_result', '') if isinstance(h.grid_data, dict) else ''
+                data.append({
+                    "date": h.date.strftime("%Y-%m-%d"),
+                    "result": day_res
+                })
+            return Response(data)
+
+        # Если дата есть — отдаем конкретный день
+        obj = DailyBacktest.objects.filter(user=request.user, date=date_str).first()
+        if obj:
+            data = {
+                "yesterday_close": obj.yesterday_close or "",
+                "today_plan": obj.today_plan or "",
+                "grid_data": obj.grid_data,
+            }
+            if obj.chart_image:
+                data["chart_image_url"] = obj.chart_image.url
+            return Response(data)
+        return Response({})
+
+    elif request.method == 'POST':
+        if not date_str:
+            return Response({"error": "Не указана дата"}, status=400)
+
+        grid_data_str = request.data.get('grid_data', '{}')
+        grid_data = json.loads(grid_data_str) if isinstance(grid_data_str, str) else grid_data_str
+
+        obj, created = DailyBacktest.objects.update_or_create(
+            user=request.user, date=date_str,
+            defaults={
+                'yesterday_close': request.data.get('yesterday_close', ''),
+                'today_plan': request.data.get('today_plan', ''),
+                'grid_data': grid_data
+            }
+        )
+
+        if 'chart_image' in request.FILES:
+            obj.chart_image = request.FILES['chart_image']
+            obj.save()
+
+        return Response({"message": "✅ Бэктест сохранен!"})
+
+# Добавь куда-нибудь в views.py
+@login_required
+def backtest_page(request):
+    return render(request, 'backtest.html') # Имя файла, куда ты сохранил HTML с таблицей бэктеста

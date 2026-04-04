@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import JSONField
 
 
 class Trade(models.Model):
@@ -11,6 +12,7 @@ class Trade(models.Model):
     entry_price = models.FloatField()
     profit = models.FloatField()
     time = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     # ICT поля
     # Макро-контекст для фильтрации
@@ -128,3 +130,59 @@ class FAQBlock(models.Model):
     text = models.TextField("Текст ответа", blank=True, null=True)
     image = models.ImageField("Скриншот", upload_to='faq/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+# 👇 МОДЕЛИ ДЛЯ СИСТЕМЫ ТЕСТИРОВАНИЯ 👇
+class Quiz(models.Model):
+    title = models.CharField("Название теста", max_length=200)
+    description = models.TextField("Описание", blank=True, null=True)
+
+    def __str__(self):
+        return self.title
+
+class Question(models.Model):
+    quiz = models.ForeignKey(Quiz, related_name='questions', on_delete=models.CASCADE)
+    text = models.TextField("Текст вопроса")
+    order = models.PositiveIntegerField("Порядок (номер вопроса)", default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.quiz.title} - Вопрос {self.order}"
+
+class AnswerChoice(models.Model):
+    question = models.ForeignKey(Question, related_name='choices', on_delete=models.CASCADE)
+    text = models.CharField("Вариант ответа", max_length=255)
+    is_correct = models.BooleanField("Это правильный ответ?", default=False)
+
+    def __str__(self):
+        return self.text
+
+class UserQuizProgress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    current_question_index = models.IntegerField(default=0)
+    correct_answers_count = models.IntegerField(default=0)
+    is_completed = models.BooleanField(default=False)
+    last_accessed = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.quiz.title} (Прогресс: {self.current_question_index})"
+
+
+class DailyBacktest(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField("Дата бэктеста")
+    yesterday_close = models.TextField("Вчерашнее закрытие", blank=True, null=True)
+    today_plan = models.TextField("План на сегодня", blank=True, null=True)
+
+    # 👇 НОВОЕ ПОЛЕ ДЛЯ СКРИНШОТА ГРАФИКА 👇
+    chart_image = models.ImageField(upload_to='backtest_screens/', blank=True, null=True)
+
+    grid_data = JSONField("Матрица ТФ", default=dict)
+
+    class Meta:
+        unique_together = ('user', 'date')
+
+    def __str__(self):
+        return f"Бэктест {self.user.username} - {self.date}"

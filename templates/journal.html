@@ -32,7 +32,7 @@
     <div class="card-body py-3">
         <div class="row g-2 mb-2">
             <div class="col-md-2">
-                <input type="date" id="filter-exact-date" class="form-control bg-dark text-light border-secondary" onchange="applyFilters()" title="Поиск по точной дате">
+                <input type="date" id="filter-exact-date" max="2099-12-31" class="form-control bg-dark text-light border-secondary" onchange="applyFilters()" title="Поиск по точной дате">
             </div>
             <div class="col-md-2">
                 <select id="filter-date" class="form-select bg-dark text-light border-secondary" onchange="saveFilterAndApply()">
@@ -76,12 +76,13 @@
             </div>
             <div class="col-md-3">
                 <select id="filter-logic" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="applyFilters()">
-                    <option value="">Любая логика входа</option>
+                    <option value="">Любая логика / -- Выбрать --</option>
                     <option value="По тренду">✅ По тренду</option>
                     <option value="Разворот">🔄 Разворот</option>
                     <option value="От нижней границы">📈 От нижней границы</option>
                     <option value="От верхней границы">📉 От верхней границы</option>
-                    <option value="Тест/Ошибка">🔧 Техническая</option>
+                    <option value="Сделка от робота">🤖 Сделка от робота</option>
+                    <option value="Тест/Ошибка">🔧 Техническая (Тест/Сбой)</option>
                     <option value="Чужая сделка">👽 Чужая сделка</option>
                 </select>
             </div>
@@ -129,6 +130,25 @@
             <div class="modal-body p-4" style="background-color: #121212;">
 
                 <div id="trade-context-header" class="mb-4"></div>
+
+                <div class="card shadow p-2 mb-3 border-info">
+                    <div class="d-flex gap-3 flex-wrap align-items-center">
+                        <span class="text-info fw-bold small">🎨 Текст под картинками:</span>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('12px')">12px</button>
+                            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('14px')">14px</button>
+                            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('18px')">18px</button>
+                            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('22px')">22px</button>
+                            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('28px')">28px</button>
+                        </div>
+                        <div class="d-flex gap-1 border-start border-secondary ps-3">
+                            <button class="btn btn-sm btn-outline-light py-0" onclick="changeTextColor('#ffffff')">Белый</button>
+                            <button class="btn btn-sm btn-outline-warning py-0" onclick="changeTextColor('#FFC107')">Желтый</button>
+                            <button class="btn btn-sm btn-outline-success py-0" onclick="changeTextColor('#4CAF50')">Зеленый</button>
+                            <button class="btn btn-sm btn-outline-primary py-0" onclick="changeTextColor('#4dabf7')">Синий</button>
+                        </div>
+                    </div>
+                </div>
 
                 <div id="unified-feed" class="mb-5">
                     <div class="text-center text-muted mt-5">Загрузка данных...</div>
@@ -235,7 +255,7 @@
     let reviewModal;
     let currentReviewTradeId = null;
     let fileState = { 'my': null, 'rs': null };
-    let currentSort = { column: 'time', asc: false }; // Сортировка по умолчанию (новые сверху)
+    let currentSort = { column: 'time', asc: false };
 
     document.addEventListener("DOMContentLoaded", () => {
         reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
@@ -293,9 +313,6 @@
     }
 
     async function initPage() {
-        const savedPeriod = localStorage.getItem('journal_default_period') || '2weeks';
-        document.getElementById('filter-date').value = savedPeriod;
-
         const tzOffset = localStorage.getItem('user_tz_offset') || "+3";
         const statsRes = await fetch(API_BASE + `trades/stats/?tz_offset=${tzOffset}`);
         const statsData = await statsRes.json();
@@ -303,6 +320,18 @@
 
         const tradesRes = await fetch(API_BASE + 'trades/?is_processed=true');
         allTradesData = await tradesRes.json();
+
+        // 👇 ВОССТАНАВЛИВАЕМ ФИЛЬТРЫ ДНЕВНИКА ИЗ ПАМЯТИ 👇
+        if(localStorage.getItem('j_type')) document.getElementById('filter-type').value = localStorage.getItem('j_type');
+        if(localStorage.getItem('j_pnl')) document.getElementById('filter-pnl').value = localStorage.getItem('j_pnl');
+        if(localStorage.getItem('shared_sym')) document.getElementById('filter-search').value = localStorage.getItem('shared_sym');
+        if(localStorage.getItem('j_trend')) document.getElementById('filter-trend').value = localStorage.getItem('j_trend');
+        if(localStorage.getItem('j_logic')) document.getElementById('filter-logic').value = localStorage.getItem('j_logic');
+        if(localStorage.getItem('j_date')) document.getElementById('filter-date').value = localStorage.getItem('j_date');
+        if(localStorage.getItem('j_exact')) document.getElementById('filter-exact-date').value = localStorage.getItem('j_exact');
+        if(localStorage.getItem('j_rev')) document.getElementById('filter-review').value = localStorage.getItem('j_rev');
+        if(localStorage.getItem('shared_mag')) document.getElementById('filter-magic').value = localStorage.getItem('shared_mag');
+        if(localStorage.getItem('shared_com')) document.getElementById('filter-comment').value = localStorage.getItem('shared_com');
 
         applyFilters();
     }
@@ -325,6 +354,18 @@
     }
 
     function applyFilters() {
+        // 👇 СОХРАНЯЕМ ФИЛЬТРЫ ПРИ КАЖДОМ КЛИКЕ 👇
+        localStorage.setItem('j_type', document.getElementById('filter-type').value);
+        localStorage.setItem('j_pnl', document.getElementById('filter-pnl').value);
+        localStorage.setItem('shared_sym', document.getElementById('filter-search').value);
+        localStorage.setItem('j_trend', document.getElementById('filter-trend').value);
+        localStorage.setItem('j_logic', document.getElementById('filter-logic').value);
+        localStorage.setItem('j_date', document.getElementById('filter-date').value);
+        localStorage.setItem('j_exact', document.getElementById('filter-exact-date').value);
+        localStorage.setItem('j_rev', document.getElementById('filter-review').value);
+        localStorage.setItem('shared_mag', document.getElementById('filter-magic').value);
+        localStorage.setItem('shared_com', document.getElementById('filter-comment').value);
+
         const typeVal = document.getElementById('filter-type').value;
         const pnlVal = document.getElementById('filter-pnl').value;
         const searchVal = document.getElementById('filter-search').value.toLowerCase();
@@ -333,7 +374,6 @@
         const dateVal = document.getElementById('filter-date').value;
         const exactDateVal = document.getElementById('filter-exact-date').value;
         const reviewVal = document.getElementById('filter-review').value;
-
         const magicVal = document.getElementById('filter-magic').value.toLowerCase();
         const commentVal = document.getElementById('filter-comment').value.toLowerCase();
 
@@ -433,7 +473,11 @@
             const magicInfo = (t.magic_number && t.magic_number !== "0") ? `<span class="text-info fw-bold">${t.magic_number}</span>` : `<span class="text-muted small">-</span>`;
             const commentInfo = t.mt5_comment ? `<span class="badge bg-secondary text-light">${t.mt5_comment}</span>` : `<span class="text-muted small">-</span>`;
 
-            // 👇 РЕНДЕР 8 СТОЛБЦОВ 👇
+            let copyBtn = '';
+            if (t.entry_logic === 'Чужая сделка' && isReviewed) {
+                copyBtn = `<button class="btn btn-sm btn-outline-warning" onclick="copyTrade(${t.id})" title="Копировать разбор">📋 Копия</button>`;
+            }
+
             html += `<tr style="${rowOpacity}">
                 <td class="ps-3"><input type="checkbox" class="form-check-input bg-dark border-secondary trade-cb" value="${t.id}"></td>
                 <td class="small">${finalDate}<br><span class="text-muted">#${t.ticket}</span></td>
@@ -445,6 +489,7 @@
                 <td>
                     <div class="d-flex gap-1">
                         ${screenBtn}
+                        ${copyBtn}
                         <button class="btn btn-sm btn-primary" onclick="openReviewModal(${t.id})" title="Открыть Разбор">🔬 РАЗБОР</button>
                         <button onclick="deleteTrade(${t.id}, '${t.ticket}')" class="btn btn-sm btn-outline-danger" title="Удалить">🗑️</button>
                     </div>
@@ -454,7 +499,6 @@
         document.getElementById('trades-table-body').innerHTML = html || '<tr><td colspan="8" class="text-center py-4 text-muted">Сделок нет.</td></tr>';
     }
 
-    // --- ЛОГИКА РАЗБОРА (Модалка) ---
     async function openReviewModal(id) {
         currentReviewTradeId = id; const t = allTradesData.find(trade => trade.id === id);
         document.getElementById('rev-ticket').innerText = t.ticket;
@@ -479,6 +523,7 @@
         document.getElementById('trade-context-header').innerHTML = topContext;
         clearSmartInput('my'); clearSmartInput('rs'); reviewModal.show(); await loadReviewFeeds();
     }
+
     async function updateTradeMeta(event, id) {
         const checkboxes = Array.from(document.querySelectorAll('.modal-conf-cb:checked')).map(cb => cb.value);
         const extraStr = document.getElementById('modal-conf-extra').value.split(',').map(s=>s.trim()).filter(s=>s);
@@ -487,7 +532,9 @@
         const res = await fetch(`${API_BASE}trades/${id}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
         if(res.ok) { const btn = event.target; btn.innerText = '✅'; setTimeout(() => btn.innerText = '💾 Сохранить', 2000); initPage(); } else { alert("Ошибка"); }
     }
+
     async function deleteFeedItem(type, itemId) { if(!confirm("Удалить?")) return; const res = await fetch(`${API_BASE}trades/delete_feed_item/?type=${type}&id=${itemId}`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } }); if(res.ok) loadReviewFeeds(); }
+
     async function loadReviewFeeds() {
         const feedContainer = document.getElementById('unified-feed');
         const res = await fetch(`${API_BASE}trades/${currentReviewTradeId}/`); const trade = await res.json();
@@ -498,18 +545,27 @@
             const myTfScreens = myScreens.filter(s => s.timeframe === tf); const rsTfReviews = rsReviews.filter(r => r.timeframe === tf || (!r.timeframe && tf === 'Общее'));
             if (myTfScreens.length > 0 || rsTfReviews.length > 0) {
                 html += `<div class="tf-comparison-row"><div class="tf-comparison-header"><h4 class="text-info m-0 fw-bold">${tf}</h4></div><div class="row"><div class="col-md-6 border-end border-secondary pe-4">`;
-                myTfScreens.forEach(s => { let imgUrl = s.image; if (imgUrl && !imgUrl.startsWith('http') && !imgUrl.startsWith('/')) imgUrl = '/media/' + imgUrl; html += `<div class="card bg-dark border-warning mb-3 shadow"><div class="card-header p-1 bg-dark text-end"><button class="btn btn-sm btn-danger py-0 px-2" onclick="deleteFeedItem('my', ${s.id})">🗑️</button></div><div class="resizable-image-container"><img src="${imgUrl}" onclick="window.open('${imgUrl}')"></div><div class="card-body p-2"><p class="small text-light m-0">${s.description || '...'}</p></div></div>`; });
+                myTfScreens.forEach(s => {
+                    let imgUrl = s.image; if (imgUrl && !imgUrl.startsWith('http') && !imgUrl.startsWith('/')) imgUrl = '/media/' + imgUrl;
+                    // ИСПОЛЬЗУЕМ dynamic-caption
+                    html += `<div class="card bg-dark border-warning mb-3 shadow"><div class="card-header p-1 bg-dark text-end"><button class="btn btn-sm btn-danger py-0 px-2" onclick="deleteFeedItem('my', ${s.id})">🗑️</button></div><div class="resizable-image-container"><img src="${imgUrl}" onclick="window.open('${imgUrl}')"></div><div class="card-body p-2"><p class="small text-light m-0 dynamic-caption" style="transition: 0.2s;">${s.description || '...'}</p></div></div>`;
+                });
                 html += `</div><div class="col-md-6 ps-4">`;
-                rsTfReviews.forEach(r => { let imgUrlRs = r.image; if (imgUrlRs && !imgUrlRs.startsWith('http') && !imgUrlRs.startsWith('/')) imgUrlRs = '/media/' + imgUrlRs; let imgHtml = imgUrlRs ? `<div class="resizable-image-container border-danger"><img src="${imgUrlRs}" onclick="window.open('${imgUrlRs}')"></div>` : ''; html += `<div class="card bg-dark border-danger mb-3 shadow-lg"><div class="card-header p-1 bg-dark text-end"><button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteFeedItem('rs', ${r.id})">🗑️</button></div>${imgHtml}<div class="card-body p-3 bg-danger bg-opacity-10">${r.error_type ? `<span class="badge bg-danger mb-2">${r.error_type}</span>` : ''}<p class="text-light m-0 fst-italic">💬 "${r.mentor_comment || '...'}"</p></div></div>`; });
+                rsTfReviews.forEach(r => {
+                    let imgUrlRs = r.image; if (imgUrlRs && !imgUrlRs.startsWith('http') && !imgUrlRs.startsWith('/')) imgUrlRs = '/media/' + imgUrlRs;
+                    let imgHtml = imgUrlRs ? `<div class="resizable-image-container border-danger"><img src="${imgUrlRs}" onclick="window.open('${imgUrlRs}')"></div>` : '';
+                    // ИСПОЛЬЗУЕМ dynamic-caption
+                    html += `<div class="card bg-dark border-danger mb-3 shadow-lg"><div class="card-header p-1 bg-dark text-end"><button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteFeedItem('rs', ${r.id})">🗑️</button></div>${imgHtml}<div class="card-body p-3 bg-danger bg-opacity-10">${r.error_type ? `<span class="badge bg-danger mb-2">${r.error_type}</span>` : ''}<p class="text-light m-0 fst-italic dynamic-caption" style="transition: 0.2s;">💬 "${r.mentor_comment || '...'}"</p></div></div>`;
+                });
                 html += `</div></div></div>`;
             }
         }); feedContainer.innerHTML = html;
     }
 
-    // --- ЛОГИКА DROPZONES ---
     function setupSmartDropzones() { ['my', 'rs'].forEach(prefix => { const dropzone = document.getElementById(`${prefix}-dropzone`); const fileInput = document.getElementById(`${prefix}-file-input`); const urlInput = document.getElementById(`${prefix}-url-input`); fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) setPreview(e.target.files[0], prefix); }); dropzone.addEventListener('paste', (e) => { e.preventDefault(); const items = (e.clipboardData || window.clipboardData).items; for (let index in items) { let item = items[index]; if (item.kind === 'file' && item.type.startsWith('image/')) { setPreview(item.getAsFile(), prefix); } else if (item.kind === 'string' && item.type === 'text/plain') { item.getAsString(text => { if (text.includes('tradingview.com/x/')) { urlInput.value = text; setPreview(text, prefix); } }); } } }); urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPreview(e.target.value, prefix); }); }); }
     function setPreview(fileOrUrl, prefix) { const previewContainer = document.getElementById(`${prefix}-preview-container`); const previewImg = document.getElementById(`${prefix}-preview-img`); const dropText = document.getElementById(`${prefix}-drop-text`); if (typeof fileOrUrl === 'string') { previewImg.src = fileOrUrl; fileState[prefix] = null; } else { previewImg.src = URL.createObjectURL(fileOrUrl); fileState[prefix] = fileOrUrl; document.getElementById(`${prefix}-url-input`).value = ''; } previewContainer.classList.remove('d-none'); dropText.classList.add('d-none'); }
     function clearSmartInput(prefix, event) { if(event) event.stopPropagation(); fileState[prefix] = null; document.getElementById(`${prefix}-file-input`).value = ''; document.getElementById(`${prefix}-url-input`).value = ''; document.getElementById(`${prefix}-preview-container`).classList.add('d-none'); document.getElementById(`${prefix}-drop-text`).classList.remove('d-none'); document.getElementById(`${prefix}-preview-img`).src = ''; }
+
     async function submitAnalysis(type) {
         const fd = new FormData(); const urlValue = document.getElementById(`${type}-url-input`).value;
         if (fileState[type]) { fd.append('image', fileState[type]); } else if (urlValue) { fd.append('image_url', urlValue); } else { if(type === 'my') return alert("Вставь картинку!"); }
@@ -518,7 +574,6 @@
         try { const res = await fetch(`${API_BASE}trades/${currentReviewTradeId}/${endpoint}/`, { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }}); btn.disabled = false; btn.innerText = "ОК"; if(res.ok) { clearSmartInput(type); if(type === 'my') document.getElementById('my-desc').value = ''; else document.getElementById('rs-comment').value = ''; loadReviewFeeds(); initPage(); } } catch(e) { btn.disabled = false; btn.innerText = "Ошибка"; }
     }
 
-    // --- ЛОГИКА ЭКСПОРТА И CSV ---
     async function uploadCSV() {
         const fileInput = document.getElementById('csv-upload');
         const file = fileInput.files[0];
@@ -529,8 +584,36 @@
         const res = await fetch(API_BASE + 'trades/upload_history/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
         if(res.ok) { const data = await res.json(); alert(data.message); fileInput.value = ''; initPage(); } else { alert("Ошибка"); }
     }
+
     async function deleteTrade(id, ticket) { if (confirm(`Удалить #${ticket}?`)) { const res = await fetch(`${API_BASE}trades/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } }); if (res.ok) initPage(); } }
     function toggleAllCb(master) { document.querySelectorAll('.trade-cb').forEach(cb => cb.checked = master.checked); }
+
     function exportToExcel() { const checkboxes = document.querySelectorAll('.trade-cb:checked'); let dataToExport = []; if (checkboxes.length > 0) { const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value)); dataToExport = allTradesData.filter(t => selectedIds.includes(t.id)); } else { dataToExport = currentFilteredTrades; } if (dataToExport.length === 0) return alert("Нет данных!"); let csvContent = "\uFEFFТикет;Дата;Актив;Тип;Объем;PnL;Magic;MT5 Коммент;Тренд;Логика;Ранг\n"; dataToExport.forEach(t => { const d = new Date(t.time); const dateStr = d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit', year: 'numeric'}).replace(',', ''); csvContent += `${t.ticket};${dateStr};${t.symbol || ''};${t.type};${t.volume.toString().replace('.', ',')};${t.profit.toString().replace('.', ',')};${t.magic_number || ''};${t.mt5_comment || ''};${t.market_trend || ''};${t.entry_logic || ''};${t.setup_grade || ''}\n`; }); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "trades_export.csv"; link.click(); }
+
+    async function copyTrade(id) {
+        if (!confirm("Создать копию этой сделки вместе со всеми картинками и разбором?")) return;
+        try {
+            const res = await fetch(`${API_BASE}trades/${id}/copy_trade/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+            if (res.ok) { initPage(); } else { alert("Ошибка при копировании сделки"); }
+        } catch(e) { alert("Ошибка сети"); }
+    }
+
+    // --- ФУНКЦИИ ИЗМЕНЕНИЯ ШРИФТА И ЦВЕТА ---
+    function changeFontSize(size) {
+        document.querySelectorAll('.dynamic-caption').forEach(el => {
+            el.style.fontSize = size;
+            el.style.lineHeight = '1.3';
+        });
+    }
+
+    function changeTextColor(color) {
+        document.querySelectorAll('.dynamic-caption').forEach(el => {
+            el.style.color = color;
+            el.classList.remove('text-light');
+        });
+    }
 </script>
 {% endblock %}

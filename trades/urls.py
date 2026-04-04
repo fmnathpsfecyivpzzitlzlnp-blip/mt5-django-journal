@@ -19,4 +19,12 @@ urlpatterns = [
     # 👇 НОВОЕ: Учим Django принимать данные от советника по этому адресу 👇
     path('mt5_webhook/', mt5_webhook, name='mt5_webhook'),
     path('faq/', views.faq_view, name='faq'),
+    path('api/quizzes/', views.get_quizzes),
+    path('api/quizzes/<int:quiz_id>/question/', views.get_quiz_question),
+    path('api/quizzes/<int:quiz_id>/submit/', views.submit_answer),
+    # 1. Путь для самой страницы (Без слова api!)
+    path('backtest/', views.backtest_page, name='backtest'),
+
+    # 2. Путь для сохранения и загрузки данных (API)
+    path('api/backtest/', views.backtest_grid_api),
 ]

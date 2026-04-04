@@ -4,6 +4,8 @@ from django.views.generic import TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
 
+from trades import views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -20,6 +22,9 @@ urlpatterns = [
 
     # 👇 НОВОЕ: Страница Playbook
     path('playbook/', TemplateView.as_view(template_name='playbook.html'), name='playbook'),
+    # 👇 ВСТАВЬ ЭТИ ДВЕ СТРОКИ СЮДА 👇
+    path('backtest/', views.backtest_page, name='backtest'),
+    path('backtest_api/', views.backtest_grid_api),
 ]
 
 # Раздача картинок для разработчика

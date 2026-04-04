@@ -8,16 +8,23 @@
 
 <div class="card shadow p-2 mb-4 border-secondary bg-dark">
     <div class="row g-2">
-        <div class="col-md-3">
-            <input type="text" id="filt-symbol" class="form-control bg-dark text-light border-secondary" placeholder="Ассет (напр. XAUUSD)" oninput="applyFilters()">
+        <div class="col-md-2">
+            <select id="filt-execution" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
+                <option value="all">🤖/👤 Все сделки</option>
+                <option value="auto">🤖 Только Роботы</option>
+                <option value="manual">👤 Только Ручные</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="text" id="filt-symbol" class="form-control bg-dark text-light border-secondary" placeholder="Ассет (XAUUSD)" oninput="applyFilters()">
         </div>
         <div class="col-md-3">
-            <input type="text" id="filt-magic" class="form-control bg-dark text-light border-secondary" placeholder="Советник (Magic Number)" oninput="applyFilters()">
+            <input type="text" id="filt-magic" class="form-control bg-dark text-light border-secondary" placeholder="Советник (Magic)" oninput="applyFilters()">
         </div>
         <div class="col-md-3">
             <input type="text" id="filt-comment" class="form-control bg-dark text-light border-secondary" placeholder="Комментарий MT5" oninput="applyFilters()">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <select id="filt-period" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
                 <option value="all">📅 За все время</option>
                 <option value="month">🗓️ Последние 30 дней</option>
@@ -109,34 +116,64 @@
     let allTrades = [];
 
     async function initPage() {
-        const res = await fetch(API_BASE + 'trades/?is_processed=true');
-        const rawTrades = await res.json();
-        allTrades = rawTrades.filter(t => t.entry_logic !== 'Тест/Ошибка' && t.entry_logic !== 'Чужая сделка');
-        applyFilters();
-    }
+    // 1. Загружаем и фильтруем базу (убираем Тесты и Чужие)
+    const res = await fetch(API_BASE + 'trades/?is_processed=true');
+    const rawTrades = await res.json();
+    allTrades = rawTrades.filter(t => t.entry_logic !== 'Тест/Ошибка' && t.entry_logic !== 'Чужая сделка');
+
+    // 2. ВОССТАНАВЛИВАЕМ ФИЛЬТРЫ ИЗ ПАМЯТИ
+    if(localStorage.getItem('shared_exec')) document.getElementById('filt-execution').value = localStorage.getItem('shared_exec');
+    if(localStorage.getItem('shared_sym')) document.getElementById('filt-symbol').value = localStorage.getItem('shared_sym');
+    if(localStorage.getItem('shared_mag')) document.getElementById('filt-magic').value = localStorage.getItem('shared_mag');
+    if(localStorage.getItem('shared_com')) document.getElementById('filt-comment').value = localStorage.getItem('shared_com');
+    if(localStorage.getItem('shared_per')) document.getElementById('filt-period').value = localStorage.getItem('shared_per');
+
+    // 3. Запускаем отрисовку с учетом восстановленных фильтров
+    applyFilters();
+}
 
     function applyFilters() {
-        let sym = document.getElementById('filt-symbol').value.toLowerCase();
-        let mag = document.getElementById('filt-magic').value.toLowerCase();
-        let com = document.getElementById('filt-comment').value.toLowerCase();
-        let per = document.getElementById('filt-period').value;
-        let now = new Date();
+    let exec = document.getElementById('filt-execution').value;
+    let sym = document.getElementById('filt-symbol').value.toLowerCase();
+    let mag = document.getElementById('filt-magic').value.toLowerCase();
+    let com = document.getElementById('filt-comment').value.toLowerCase();
+    let per = document.getElementById('filt-period').value;
 
-        let filtered = allTrades.filter(t => {
-            let sMatch = (t.symbol || '').toLowerCase().includes(sym);
-            let mMatch = (t.magic_number || '').toString().toLowerCase().includes(mag);
-            let cMatch = (t.mt5_comment || '').toLowerCase().includes(com);
+    // 👇 СОХРАНЯЕМ ФИЛЬТРЫ В ПАМЯТЬ БРАУЗЕРА 👇
+    localStorage.setItem('shared_exec', exec);
+    localStorage.setItem('shared_sym', sym);
+    localStorage.setItem('shared_mag', mag);
+    localStorage.setItem('shared_com', com);
+    localStorage.setItem('shared_per', per);
 
-            let dMatch = true;
-            let td = new Date(t.time);
-            if(per === 'month') { let m = new Date(); m.setDate(now.getDate() - 30); if(td < m) dMatch = false; }
-            else if(per === 'week') { let w = new Date(); w.setDate(now.getDate() - 7); if(td < w) dMatch = false; }
+    let now = new Date();
 
-            return sMatch && mMatch && cMatch && dMatch;
-        });
+    let filtered = allTrades.filter(t => {
+        let sMatch = (t.symbol || '').toLowerCase().includes(sym);
+        let mMatch = (t.magic_number || '').toString().toLowerCase().includes(mag);
+        let cMatch = (t.mt5_comment || '').toLowerCase().includes(com);
 
-        calculateDynamicStats(filtered);
-        renderWeekMatrix(filtered);
+        let matchExec = true;
+        let isAuto = (t.magic_number && t.magic_number !== "0" && t.magic_number !== "");
+        if (exec === 'auto' && !isAuto) matchExec = false;
+        if (exec === 'manual' && isAuto) matchExec = false;
+
+        let dMatch = true;
+        let td = new Date(t.time);
+        if(per === 'month') { let m = new Date(); m.setDate(now.getDate() - 30); if(td < m) dMatch = false; }
+        else if(per === 'week') { let w = new Date(); w.setDate(now.getDate() - 7); if(td < w) dMatch = false; }
+
+        // 👇 ИСПРАВЛЕННЫЙ РЕТУРН (Добавлено && matchExec) 👇
+        return sMatch && mMatch && cMatch && dMatch && matchExec;
+    });
+
+    // Эти вызовы зависят от страницы (Аналитика или Аудит)
+    if (typeof updateTopStats === 'function') updateTopStats(filtered);
+    if (typeof calculatePropTracker === 'function') calculatePropTracker(filtered);
+    if (typeof renderHeatmap === 'function') renderHeatmap(filtered);
+    if (typeof updateCharts === 'function') updateCharts(filtered);
+    if (typeof calculateDynamicStats === 'function') calculateDynamicStats(filtered);
+    if (typeof renderWeekMatrix === 'function') renderWeekMatrix(filtered);
     }
 
     function calculateDynamicStats(trades) {
