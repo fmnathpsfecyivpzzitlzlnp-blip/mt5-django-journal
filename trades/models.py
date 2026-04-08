@@ -106,7 +106,8 @@ class TradingRule(models.Model):
         # 👇 НОВЫЕ КАТЕГОРИИ ДЛЯ КОНСТИТУЦИИ (Дневник) 👇
         ('rev_entry', '🔄 Вход: Разворот'),
         ('trend_entry', '✅ Вход: По тренду'),
-        ('psy_base', '🛑 Психология и База')
+        ('psy_base', '🛑 Психология и База'),
+        ('tilt_quote', '🆘 Цитата при убытке')
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.CharField("Категория", max_length=20, choices=CATEGORY_CHOICES, default='rule')

@@ -5,11 +5,25 @@
     <div class="col-md-6">
         <h4 class="text-light mb-4">⚙️ Настройки профиля</h4>
         
-        <div class="card shadow p-4 mb-4">
+        <div class="card shadow p-4 mb-4 border-info bg-dark">
+            <h5 class="text-info mb-2">🧠 Отрезвляющие цитаты (Психо-аудит)</h5>
+            <p class="text-secondary small mb-3">Эти фразы будут случайным образом появляться при разборе убыточных сделок или тильте, чтобы сбить эмоции.</p>
+
+            <div class="input-group mb-3 shadow-sm">
+                <input type="text" id="new-tilt-quote" class="form-control bg-black text-light border-info" placeholder="Например: Рынок мне ничего не должен...">
+                <button class="btn btn-info fw-bold text-dark" onclick="addTiltQuote()">Добавить</button>
+            </div>
+
+            <ul class="list-group list-group-flush rounded border border-secondary" id="tilt-quotes-list">
+                <li class="list-group-item bg-dark text-center text-muted small">Загрузка...</li>
+            </ul>
+        </div>
+
+        <div class="card shadow p-4 mb-4 bg-dark border-secondary">
             <h5 class="text-success mb-3">Временные настройки</h5>
 
             <label class="form-label text-secondary small">1. Ваше местное время (Для графиков)</label>
-            <select id="settings-tz" class="form-select bg-dark text-light border-secondary mb-3">
+            <select id="settings-tz" class="form-select bg-black text-light border-secondary mb-3">
                 <option value="0">Без смещения (UTC 0)</option>
                 <option value="-4">Нью-Йорк (UTC -4)</option>
                 <option value="+2">Киев / Восточная Европа (UTC +2)</option>
@@ -18,14 +32,15 @@
             </select>
 
             <label class="form-label text-secondary small">2. Время терминала (Только для импорта CSV)</label>
-            <select id="broker-tz" class="form-select bg-dark text-light border-secondary mb-4">
+            <select id="broker-tz" class="form-select bg-black text-light border-secondary mb-4">
                 <option value="2">Восточная Европа Зима (EET, UTC+2)</option>
                 <option value="3">Восточная Европа Лето (EEST, UTC+3)</option>
                 <option value="0">Гринвич (UTC 0)</option>
             </select>
 
-            <button class="btn btn-primary w-100 fw-bold" onclick="saveProfile()">💾 Сохранить настройки</button>
+            <button class="btn btn-success w-100 fw-bold" onclick="saveProfile()">💾 Сохранить настройки времени</button>
         </div>
+
         <div class="card bg-dark border-danger mt-4 shadow">
             <div class="card-header bg-danger bg-opacity-25 border-danger text-danger fw-bold">
                 ⚠️ Опасная зона (Управление базой)
@@ -34,16 +49,10 @@
                 <p class="text-light small">
                     Вы можете массово удалить все "пустые" сделки из вашей базы. Это навсегда удалит все сделки, у которых <b>нет ваших скриншотов</b>, <b>нет разбора от ментора</b> и которые <b>не помечены как "Чужая сделка"</b>.
                 </p>
-                <button class="btn btn-outline-danger fw-bold" onclick="cleanupEmptyTrades(event)">
+                <button class="btn btn-outline-danger fw-bold w-100" onclick="cleanupEmptyTrades(event)">
                     🗑️ Очистить базу от пустых сделок
                 </button>
             </div>
-        </div>
-
-        <div class="card shadow p-4 border border-warning bg-dark">
-            <h5 class="text-warning mb-3">API Подключение (MT5)</h5>
-            <p class="text-secondary small">Скоро здесь появится ваш персональный токен для подключения робота из MetaTrader 5 напрямую к этому дашборду.</p>
-            <input type="text" class="form-control bg-secondary text-light border-0" value="В РАЗРАБОТКЕ..." disabled>
         </div>
     </div>
 </div>
@@ -51,54 +60,70 @@
 
 {% block scripts %}
 <script>
-    function initPage() {
+    document.addEventListener("DOMContentLoaded", () => {
         document.getElementById('settings-tz').value = localStorage.getItem('user_tz_offset') || "+3";
         document.getElementById('broker-tz').value = localStorage.getItem('broker_tz_offset') || "3";
-    }
+        loadTiltQuotes();
+    });
 
     function saveProfile() {
         localStorage.setItem('user_tz_offset', document.getElementById('settings-tz').value);
         localStorage.setItem('broker_tz_offset', document.getElementById('broker-tz').value);
-        alert("Настройки успешно сохранены!");
+        alert("Настройки времени успешно сохранены!");
     }
 
     async function cleanupEmptyTrades(event) {
-        // Запрашиваем подтверждение
-        if (!confirm("ВНИМАНИЕ! Это действие необратимо.\n\nВы уверены, что хотите удалить все неразобранные сделки?")) {
-            return;
-        }
-
-        const btn = event.target;
-        const originalText = btn.innerText;
-        btn.disabled = true;
-        btn.innerText = "Удаление...";
-
+        if (!confirm("ВНИМАНИЕ! Это действие необратимо.\n\nВы уверены, что хотите удалить все неразобранные сделки?")) return;
+        const btn = event.target; const originalText = btn.innerText; btn.disabled = true; btn.innerText = "Удаление...";
         try {
-            // Отправляем запрос на наш новый эндпоинт
-            const res = await fetch(API_BASE + 'trades/cleanup_empty_trades/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken') // Обязательно передаем токен безопасности
-                }
-            });
-
+            const res = await fetch(API_BASE + 'trades/cleanup_empty_trades/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') } });
             const data = await res.json();
+            btn.disabled = false; btn.innerText = originalText;
+            if (res.ok) alert(data.message); else alert("❌ Ошибка: " + data.error);
+        } catch (e) { btn.disabled = false; btn.innerText = originalText; alert("❌ Ошибка сети"); }
+    }
 
-            btn.disabled = false;
-            btn.innerText = originalText;
-
-            if (res.ok) {
-                alert(data.message); // Покажет "Успешно очищено! Удалено: 250 шт."
+    // --- ЛОГИКА ЦИТАТ ПСИХО-АУДИТА ---
+    async function loadTiltQuotes() {
+        const res = await fetch(API_BASE + 'rules/');
+        if (res.ok) {
+            const rules = await res.json();
+            const quotes = rules.filter(r => r.category === 'tilt_quote');
+            let html = '';
+            if (quotes.length === 0) {
+                html = '<li class="list-group-item bg-black text-muted small border-secondary text-center py-3">Вы еще не добавили ни одной цитаты. Напишите первую! 👇</li>';
             } else {
-                alert("❌ Ошибка: " + data.error);
+                quotes.forEach(q => {
+                    html += `
+                    <li class="list-group-item bg-black text-light border-secondary d-flex justify-content-between align-items-center">
+                        <span class="small fst-italic">"${q.text}"</span>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-3" onclick="deleteRule(${q.id})">✖</button>
+                    </li>`;
+                });
             }
-        } catch (e) {
-            btn.disabled = false;
-            btn.innerText = originalText;
-            alert("❌ Ошибка сети");
+            document.getElementById('tilt-quotes-list').innerHTML = html;
+        }
+    }
+
+    async function addTiltQuote() {
+        const text = document.getElementById('new-tilt-quote').value.trim();
+        if (!text) return alert("Введите текст!");
+        const res = await fetch(API_BASE + 'rules/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ category: 'tilt_quote', text: text })
+        });
+        if (res.ok) {
+            document.getElementById('new-tilt-quote').value = '';
+            loadTiltQuotes();
+        }
+    }
+
+    async function deleteRule(id) {
+        if(confirm('Точно удалить эту фразу?')) {
+            await fetch(API_BASE + `rules/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            loadTiltQuotes();
         }
     }
 </script>
-
 {% endblock %}

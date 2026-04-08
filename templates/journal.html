@@ -131,6 +131,21 @@
 
                 <div id="trade-context-header" class="mb-4"></div>
 
+                <div class="modal-body p-4" style="background-color: #121212;">
+
+                <div id="trade-context-header" class="mb-4"></div>
+
+                <div id="tilt-warning-container" class="d-none mb-4">
+                    <div class="alert bg-danger bg-opacity-10 border-danger d-flex align-items-center p-3 shadow">
+                        <div class="fs-1 me-3">🧠</div>
+                        <div>
+                            <h6 class="text-danger fw-bold mb-1">Психо-аудит убытка: Отрезвление</h6>
+                            <p id="tilt-quote-text" class="text-light m-0 small fst-italic"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card shadow p-2 mb-3 border-info">
+
                 <div class="card shadow p-2 mb-3 border-info">
                     <div class="d-flex gap-3 flex-wrap align-items-center">
                         <span class="text-info fw-bold small">🎨 Текст под картинками:</span>
@@ -320,6 +335,14 @@
 
         const tradesRes = await fetch(API_BASE + 'trades/?is_processed=true');
         allTradesData = await tradesRes.json();
+        // 👇 НОВОЕ: ЗАГРУЖАЕМ ТВОИ ЛИЧНЫЕ ЦИТАТЫ ИЗ БАЗЫ 👇
+        try {
+            const rulesRes = await fetch(API_BASE + 'rules/');
+            if (rulesRes.ok) {
+                const rules = await rulesRes.json();
+                customTiltQuotes = rules.filter(r => r.category === 'tilt_quote').map(r => r.text);
+            }
+        } catch(e) { console.error("Ошибка загрузки цитат"); }
 
         // 👇 ВОССТАНАВЛИВАЕМ ФИЛЬТРЫ ДНЕВНИКА ИЗ ПАМЯТИ 👇
         if(localStorage.getItem('j_type')) document.getElementById('filter-type').value = localStorage.getItem('j_type');
@@ -500,28 +523,62 @@
     }
 
     async function openReviewModal(id) {
-        currentReviewTradeId = id; const t = allTradesData.find(trade => trade.id === id);
+        currentReviewTradeId = id;
+        const t = allTradesData.find(trade => trade.id === id);
         document.getElementById('rev-ticket').innerText = t.ticket;
+
         let factors = t.confluence_factors ? t.confluence_factors.split(',').map(s=>s.trim()) : [];
         const isChecked = (val) => factors.includes(val) ? 'checked' : '';
         const stdFactors = ['HTF POI', 'Liquidity Sweep', 'MSS', 'FVG', 'OB', 'BB', 'MM'];
         const extraFactors = factors.filter(f => !stdFactors.includes(f)).join(', ');
         const isSel = (val, field) => (t[field] === val) ? 'selected' : '';
+
         let topContext = `
             <div class="card bg-info bg-opacity-10 border-info p-3 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2"><h5 class="text-info m-0">📋 Контекст</h5><button class="btn btn-sm btn-info fw-bold text-dark" onclick="updateTradeMeta(event, ${t.id})">💾 Сохранить</button></div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-3"><label class="small text-secondary mb-1">Тренд</label><select id="modal-trend" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="Лонговый" ${isSel('Лонговый', 'market_trend')}>📈 Лонг</option><option value="Шортовый" ${isSel('Шортовый', 'market_trend')}>📉 Шорт</option><option value="Боковик" ${isSel('Боковик', 'market_trend')}>↔️ Боковик</option></select></div>
                     <div class="col-md-3"><label class="small text-secondary mb-1">Логика</label><select id="modal-logic" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="По тренду" ${isSel('По тренду', 'entry_logic')}>✅ По тренду</option><option value="Разворот" ${isSel('Разворот', 'entry_logic')}>🔄 Разворот</option><option value="От нижней границы" ${isSel('От нижней границы', 'entry_logic')}>📈 От нижней границы</option><option value="От верхней границы" ${isSel('От верхней границы', 'entry_logic')}>📉 От верхней границы</option><option value="Тест/Ошибка" ${isSel('Тест/Ошибка', 'entry_logic')}>🔧 Тест</option><option value="Чужая сделка" ${isSel('Чужая сделка', 'entry_logic')}>👽 Чужая</option></select></div>
-                    <div class="col-md-3"><label class="small text-secondary mb-1">Психология</label><select id="modal-psy" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="Идеально по плану" ${isSel('Идеально по плану', 'psychology')}>🟢 План</option><option value="FOMO (Жадность)" ${isSel('FOMO (Жадность)', 'psychology')}>🟡 FOMO</option><option value="Страх (Неуверенность)" ${isSel('Страх (Неуверенность)', 'psychology')}>🟠 Страх</option><option value="Тильт (Отыгрыш)" ${isSel('Тильт (Отыгрыш)', 'psychology')}>🔴 Тильт</option></select></div>
+                    <div class="col-md-3"><label class="small text-secondary mb-1">Психология</label><select id="modal-psy" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="checkTiltStatus(this.value, ${t.profit})"><option value="">--</option><option value="Идеально по плану" ${isSel('Идеально по плану', 'psychology')}>🟢 План</option><option value="FOMO (Жадность)" ${isSel('FOMO (Жадность)', 'psychology')}>🟡 FOMO</option><option value="Страх (Неуверенность)" ${isSel('Страх (Неуверенность)', 'psychology')}>🟠 Страх</option><option value="Тильт (Отыгрыш)" ${isSel('Тильт (Отыгрыш)', 'psychology')}>🔴 Тильт</option></select></div>
                     <div class="col-md-3"><label class="small text-secondary mb-1">Ранг</label><select id="modal-grade" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="A+" ${isSel('A+', 'setup_grade')}>🔥 A+</option><option value="B" ${isSel('B', 'setup_grade')}>👍 B</option><option value="C" ${isSel('C', 'setup_grade')}>⚠️ C</option></select></div>
                 </div>
                 <div class="row g-3"><div class="col-md-6"><label class="small text-light fw-bold mb-1">Факторы:</label><div class="d-flex flex-wrap gap-2 mb-2 p-2 bg-dark rounded border border-secondary">
                     ${stdFactors.map(f => `<div class="form-check"><input class="form-check-input modal-conf-cb" type="checkbox" value="${f}" ${isChecked(f)}><label class="form-check-label small text-light">${f}</label></div>`).join('')}
                 </div><input type="text" id="modal-conf-extra" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Свой..." value="${extraFactors}"></div><div class="col-md-6 border-start border-secondary"><label class="small text-light fw-bold mb-1">План:</label><textarea id="modal-trade-comment" class="form-control form-control-sm bg-dark text-light border-secondary h-75">${t.comment || ''}</textarea></div></div>
             </div>`;
+
         document.getElementById('trade-context-header').innerHTML = topContext;
-        clearSmartInput('my'); clearSmartInput('rs'); reviewModal.show(); await loadReviewFeeds();
+
+        // 👇 Вызываем проверку на тильт 👇
+        checkTiltStatus(t.psychology, t.profit);
+
+        clearSmartInput('my'); clearSmartInput('rs');
+        reviewModal.show();
+        await loadReviewFeeds();
+    }
+
+    // 👇 НОВАЯ ФУНКЦИЯ ДЛЯ ВЫВОДА ЦИТАТ 👇
+    // 👇 ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ ВЫВОДА ТВОИХ ЦИТАТ 👇
+    function checkTiltStatus(psychology, profit) {
+        const tiltContainer = document.getElementById('tilt-warning-container');
+        const quoteText = document.getElementById('tilt-quote-text');
+
+        // Показываем блок, если сделка убыточная ИЛИ выбрана плохая психология
+        if (profit < 0 || ['FOMO (Жадность)', 'Тильт (Отыгрыш)', 'Страх (Неуверенность)'].includes(psychology)) {
+
+            // Если ты еще не добавил фразы в Профиле, покажем эту заглушку
+            let randomQuote = "Остановись. Дыши. Проанализируй ошибки. (Добавь свои фразы в Профиле ⚙️)";
+
+            // Если фразы есть — берем случайную из твоей базы
+            if (customTiltQuotes.length > 0) {
+                randomQuote = customTiltQuotes[Math.floor(Math.random() * customTiltQuotes.length)];
+            }
+
+            quoteText.innerText = `"${randomQuote}"`;
+            tiltContainer.classList.remove('d-none');
+        } else {
+            tiltContainer.classList.add('d-none');
+        }
     }
 
     async function updateTradeMeta(event, id) {

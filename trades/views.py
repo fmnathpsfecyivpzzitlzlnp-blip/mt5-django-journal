@@ -663,53 +663,50 @@ def backtest_grid_api(request):
     date_str = request.GET.get('date') or request.data.get('date')
 
     if request.method == 'GET':
-        # Если дату не передали — возвращаем ИСТОРИЮ ВСЕХ ДНЕЙ
         if not date_str:
+            # Получаем все бэктесты
             history = DailyBacktest.objects.filter(user=request.user).order_by('-date')
+
+            # Находим даты, когда были реальные сделки (не Тесты)
+            trade_dates = Trade.objects.filter(
+                user=request.user
+            ).exclude(entry_logic='Тест/Ошибка').values_list('time__date', flat=True).distinct()
+
+            real_trade_dates = [d.strftime("%Y-%m-%d") for d in trade_dates if d]
+
             data = []
             for h in history:
-                # Достаем оценку из JSON
+                curr_date = h.date.strftime("%Y-%m-%d")
                 day_res = h.grid_data.get('day_result', '') if isinstance(h.grid_data, dict) else ''
                 data.append({
-                    "date": h.date.strftime("%Y-%m-%d"),
-                    "result": day_res
+                    "date": curr_date,
+                    "result": day_res,
+                    "has_real_trades": curr_date in real_trade_dates  # Флаг активности
                 })
             return Response(data)
 
-        # Если дата есть — отдаем конкретный день
+        # Отдача данных конкретного дня
         obj = DailyBacktest.objects.filter(user=request.user, date=date_str).first()
         if obj:
-            data = {
-                "yesterday_close": obj.yesterday_close or "",
-                "today_plan": obj.today_plan or "",
-                "grid_data": obj.grid_data,
-            }
-            if obj.chart_image:
-                data["chart_image_url"] = obj.chart_image.url
+            data = {"yesterday_close": obj.yesterday_close or "", "today_plan": obj.today_plan or "",
+                    "grid_data": obj.grid_data}
+            if obj.chart_image: data["chart_image_url"] = obj.chart_image.url
             return Response(data)
         return Response({})
 
     elif request.method == 'POST':
-        if not date_str:
-            return Response({"error": "Не указана дата"}, status=400)
-
+        if not date_str: return Response({"error": "No date"}, status=400)
         grid_data_str = request.data.get('grid_data', '{}')
         grid_data = json.loads(grid_data_str) if isinstance(grid_data_str, str) else grid_data_str
-
-        obj, created = DailyBacktest.objects.update_or_create(
+        obj, _ = DailyBacktest.objects.update_or_create(
             user=request.user, date=date_str,
-            defaults={
-                'yesterday_close': request.data.get('yesterday_close', ''),
-                'today_plan': request.data.get('today_plan', ''),
-                'grid_data': grid_data
-            }
+            defaults={'yesterday_close': request.data.get('yesterday_close', ''),
+                      'today_plan': request.data.get('today_plan', ''), 'grid_data': grid_data}
         )
-
         if 'chart_image' in request.FILES:
             obj.chart_image = request.FILES['chart_image']
             obj.save()
-
-        return Response({"message": "✅ Бэктест сохранен!"})
+        return Response({"message": "✅ Сохранено!"})
 
 # Добавь куда-нибудь в views.py
 @login_required
