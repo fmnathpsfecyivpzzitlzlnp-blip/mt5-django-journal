@@ -1,3 +1,5 @@
+import re
+
 import requests
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
@@ -62,15 +64,35 @@ class PlaybookViewSet(viewsets.ViewSet):
         return Response(data)
 
     def create(self, request):
-        p = PlaybookPattern.objects.create(
-            user=request.user,
-            title=request.data.get('title'),
-            description=request.data.get('description'),
-            market_trend=request.data.get('market_trend'),
-            entry_logic=request.data.get('entry_logic'),
-            ideal_screenshot=request.FILES.get('image') # Забираем файл картинки
-        )
-        return Response({"message": "Сетап добавлен в Playbook!", "id": p.id}, status=201)
+        try:
+            image_file = request.FILES.get('image')
+            image_url = request.data.get('image_url')
+
+            # 👇 Используем нашу новую функцию для скачивания по ссылке
+            if image_url and not image_file:
+                downloaded_file, error_msg = download_tv_image(image_url)
+                if error_msg:
+                    return Response({"error": error_msg}, status=400)
+                image_file = downloaded_file
+
+            if not image_file:
+                return Response({"error": "Нет ни файла, ни рабочей ссылки."}, status=400)
+
+            # 👇 Сохраняем надежным способом через .save()
+            p = PlaybookPattern(
+                user=request.user,
+                title=request.data.get('title'),
+                description=request.data.get('description', ''),
+                market_trend=request.data.get('market_trend', 'Лонговый'),
+                entry_logic=request.data.get('entry_logic', 'По тренду')
+            )
+            # Привязываем скачанный файл к полю
+            p.ideal_screenshot.save(image_file.name, image_file, save=False)
+            p.save()
+
+            return Response({"status": "Успешно добавлено!"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
 
     def destroy(self, request, pk=None):
         PlaybookPattern.objects.filter(id=pk, user=request.user).delete()
@@ -570,6 +592,7 @@ class FAQTopicViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+
 class FAQBlockViewSet(viewsets.ModelViewSet):
     serializer_class = FAQBlockSerializer
     queryset = FAQBlock.objects.all()
@@ -581,22 +604,23 @@ class FAQBlockViewSet(viewsets.ModelViewSet):
             image_file = request.FILES.get('image')
             image_url = request.data.get('image_url')
 
-            # Скачиваем скриншот TradingView, если прислали ссылку
+            # 👇 ТЕПЕРЬ FAQ ТОЖЕ ИСПОЛЬЗУЕТ НАШ УМНЫЙ ЗАГРУЗЧИК 👇
             if image_url and not image_file:
-                import requests
-                from django.core.files.base import ContentFile
-                import random
-                resp = requests.get(image_url)
-                if resp.status_code == 200:
-                    file_name = f"faq_tv_{random.randint(1000, 9999)}.png"
-                    image_file = ContentFile(resp.content, name=file_name)
+                downloaded_file, error_msg = download_tv_image(image_url)
+                if error_msg:
+                    return Response({"error": error_msg}, status=400)
+                image_file = downloaded_file
 
-            block = FAQBlock.objects.create(
-                topic_id=topic_id,
-                text=text,
-                image=image_file
-            )
+            # Создаем блок ответа
+            block = FAQBlock(topic_id=topic_id, text=text)
+
+            # Если картинка успешно скачалась, привязываем её
+            if image_file:
+                block.image.save(image_file.name, image_file, save=False)
+
+            block.save()
             return Response({'status': 'Блок добавлен', 'id': block.id})
+
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
@@ -712,3 +736,28 @@ def backtest_grid_api(request):
 @login_required
 def backtest_page(request):
     return render(request, 'backtest.html') # Имя файла, куда ты сохранил HTML с таблицей бэктеста
+
+
+def download_tv_image(url):
+    """Умный парсер картинок TradingView"""
+    url = url.strip()
+    if not url.startswith('http'): url = 'https://' + url
+
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200: return None, "Ошибка скачивания"
+
+        # Если TV отдает HTML, ищем прямую ссылку на картинку внутри
+        if 'text/html' in resp.headers.get('Content-Type', ''):
+            match = re.search(r'property="og:image"\s+content="([^"]+)"', resp.text)
+            if match:
+                resp = requests.get(match.group(1), headers=headers, timeout=10)
+            else:
+                return None, "Не нашел картинку на странице"
+
+        file_name = f"tv_playbook_{random.randint(1000, 9999)}.png"
+        return ContentFile(resp.content, name=file_name), None
+    except Exception as e:
+        return None, str(e)

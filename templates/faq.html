@@ -48,18 +48,26 @@
 <script>
     let faqData = [];
     let filesDict = {};
+    let openAccordions = []; // 👈 ДОБАВИЛИ ПАМЯТЬ ДЛЯ ОТКРЫТЫХ ВКЛАДОК
 
     document.addEventListener("DOMContentLoaded", () => {
         loadFAQ();
     });
 
     async function loadFAQ() {
+        // 👇 1. СОХРАНЯЕМ СОСТОЯНИЕ: запоминаем ID всех открытых вкладок
+        openAccordions = [];
+        document.querySelectorAll('.accordion-collapse.show').forEach(el => {
+            openAccordions.push(el.id);
+        });
+
         const res = await fetch(API_BASE + 'faq_topics/');
         faqData = await res.json();
-        renderFAQ(faqData);
+
+        // Вызываем поиск (он сам решит, рендерить всё или только результаты фильтра)
+        applyFAQSearch();
     }
 
-    // 👇 ФУНКЦИЯ ПОИСКА 👇
     function applyFAQSearch() {
         const query = document.getElementById('faq-search').value.toLowerCase().trim();
         if (!query) {
@@ -148,19 +156,53 @@
         }
         container.innerHTML = html;
         setupAllDropzones(dataToRender);
+
+        // 👇 2. ВОССТАНАВЛИВАЕМ СОСТОЯНИЕ: Открываем вкладки, которые были открыты до рендера
+        openAccordions.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('show');
+                const btn = document.querySelector(`[data-bs-target="#${id}"]`);
+                if (btn) btn.classList.remove('collapsed');
+            }
+        });
     }
 
     async function createTopic() {
         const cat = document.getElementById('topic-category').value.trim() || 'Разное';
         const q = document.getElementById('topic-question').value.trim();
         if(!q) return alert("Введи вопрос!");
+
+        const scrollPos = window.scrollY; // Запоминаем скролл
+
         await fetch(API_BASE + 'faq_topics/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ category: cat, question: q }) });
-        bootstrap.Modal.getInstance(document.getElementById('addTopicModal')).hide();
+
+        // ❌ ЗАКРЫТИЕ ОТКЛЮЧЕНО: Модалка останется открытой, как ты и просил
+        // bootstrap.Modal.getInstance(document.getElementById('addTopicModal')).hide();
+
         document.getElementById('topic-question').value = '';
-        loadFAQ();
+
+        await loadFAQ();
+        window.scrollTo(0, scrollPos); // Возвращаем скролл на место
     }
-    async function deleteTopic(id) { if(confirm("Удалить всё?")) { await fetch(API_BASE + `faq_topics/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } }); loadFAQ(); } }
-    async function deleteBlock(id) { if(confirm("Удалить блок?")) { await fetch(API_BASE + `faq_blocks/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } }); loadFAQ(); } }
+
+    async function deleteTopic(id) {
+        if(confirm("Удалить всё?")) {
+            const scrollPos = window.scrollY;
+            await fetch(API_BASE + `faq_topics/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            await loadFAQ();
+            window.scrollTo(0, scrollPos);
+        }
+    }
+
+    async function deleteBlock(id) {
+        if(confirm("Удалить блок?")) {
+            const scrollPos = window.scrollY;
+            await fetch(API_BASE + `faq_blocks/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            await loadFAQ();
+            window.scrollTo(0, scrollPos);
+        }
+    }
 
     function setupAllDropzones(data) {
         data.forEach(t => {
@@ -174,6 +216,7 @@
             urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPreview(t.id, e.target.value); });
         });
     }
+
     function setPreview(topicId, fileOrUrl) {
         const previewContainer = document.getElementById(`preview-container-${topicId}`);
         const previewImg = document.getElementById(`preview-img-${topicId}`);
@@ -182,14 +225,32 @@
         else { previewImg.src = URL.createObjectURL(fileOrUrl); filesDict[topicId] = fileOrUrl; document.getElementById(`url-input-${topicId}`).value = ''; }
         previewContainer.classList.remove('d-none'); dropText.classList.add('d-none');
     }
-    function clearDropzone(topicId, event) { if(event) event.stopPropagation(); filesDict[topicId] = null; document.getElementById(`url-input-${topicId}`).value = ''; document.getElementById(`preview-container-${topicId}`).classList.add('d-none'); document.getElementById(`drop-text-${topicId}`).classList.remove('d-none'); document.getElementById(`preview-img-${topicId}`).src = ''; }
+
+    function clearDropzone(topicId, event) {
+        if(event) event.stopPropagation();
+        filesDict[topicId] = null;
+        document.getElementById(`url-input-${topicId}`).value = '';
+        document.getElementById(`preview-container-${topicId}`).classList.add('d-none');
+        document.getElementById(`drop-text-${topicId}`).classList.remove('d-none');
+        document.getElementById(`preview-img-${topicId}`).src = '';
+    }
+
     async function addBlock(topicId) {
         const fd = new FormData(); fd.append('topic_id', topicId); fd.append('text', document.getElementById(`text-input-${topicId}`).value);
         const urlValue = document.getElementById(`url-input-${topicId}`).value; const file = filesDict[topicId];
         if (file) fd.append('image', file); else if (urlValue) fd.append('image_url', urlValue);
         if(!fd.get('text') && !file && !urlValue) return alert("Пусто!");
+
+        const scrollPos = window.scrollY; // 👈 3. ФИКСИРУЕМ СКРОЛЛ ПЕРЕД СОХРАНЕНИЕМ
+
         const res = await fetch(API_BASE + 'faq_blocks/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
-        if(res.ok) { clearDropzone(topicId); document.getElementById(`text-input-${topicId}`).value = ''; loadFAQ(); }
+        if(res.ok) {
+            clearDropzone(topicId);
+            document.getElementById(`text-input-${topicId}`).value = '';
+
+            await loadFAQ();
+            window.scrollTo(0, scrollPos); // 👈 ВОЗВРАЩАЕМ СКРОЛЛ НА МЕСТО ПОСЛЕ ОБНОВЛЕНИЯ
+        }
     }
 </script>
 {% endblock %}

@@ -2,18 +2,11 @@
 
 {% block extra_head %}
 <style>
-    .bias-textarea { resize: vertical; min-height: 100px; }
-    .grid-table th { border-bottom: 2px solid #555 !important; }
-    .grid-table td { border-color: #333; vertical-align: middle; }
-    .col-time { width: 12%; font-weight: bold; color: #adb5bd; }
-    .col-1m { width: 36%; } .col-5m { width: 22%; } .col-15m { width: 15%; } .col-1h { width: 15%; }
-    .check-label { font-size: 0.8rem; cursor: pointer; user-select: none; }
-    .compact-select { font-size: 0.8rem; padding: 4px 8px; height: auto; border-radius: 4px; }
+    .bias-textarea { resize: vertical; min-height: 80px; }
     .smart-dropzone { border: 2px dashed #4dabf7; transition: 0.2s; cursor: pointer; }
-    .smart-dropzone:hover { background-color: rgba(77, 171, 247, 0.1); border-color: #fff; }
-    .session-header { background: #212529 !important; font-weight: bold; color: #0dcaf0; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; }
+    .smart-dropzone:hover, .smart-dropzone:focus { background-color: rgba(77, 171, 247, 0.1); border-color: #fff; }
 
-    /* Тепловая карта */
+    /* Стили для тепловой карты (Дашборд) */
     .heatmap-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .heatmap-box {
         width: 34px; height: 34px; border-radius: 6px; cursor: pointer;
@@ -25,28 +18,31 @@
     .heatmap-loss { background-color: #dc3545; }
     .heatmap-flat { background-color: #ffc107; color: #000; }
     .heatmap-none { background-color: #444; }
-    /* Индикатор реальных сделок */
     .heatmap-box.has-trades::after {
         content: ''; position: absolute; top: 2px; right: 2px;
         width: 6px; height: 6px; background-color: #0dcaf0; border-radius: 50%;
         box-shadow: 0 0 5px #0dcaf0;
     }
-    /* Сетка настроек часов */
+
+    .event-row { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     .hours-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="text-light m-0">🧪 Бэктест структуры (Killzones)</h4>
+    <h4 class="text-light m-0">🧪 Бэктест: Хронология сетапа</h4>
+
     <div class="d-flex align-items-center gap-2 bg-dark p-2 rounded border border-secondary shadow-sm">
         <label class="text-secondary small fw-bold m-0 ms-2">ДАТА:</label>
         <input type="date" max="9999-12-31" id="backtest-date" class="form-control form-control-sm bg-black text-light border-secondary" onchange="loadGridData()" style="width: 140px;">
 
-        <button class="btn btn-sm btn-outline-info fw-bold" onclick="openHistory()">📅 Дашборд</button>
-        <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="openSettings()">⚙️ Настройки часов</button>
+        <button class="btn btn-sm btn-outline-info fw-bold ms-2" onclick="openHistory()">📅 Дашборд</button>
+        <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="openSettings()">⚙️ Настройки</button>
 
-        <div class="border-start border-secondary h-100 mx-1"></div>
+        <div class="border-start border-secondary h-100 mx-2"></div>
+
         <select id="day-result" class="form-select form-select-sm bg-black text-light border-secondary fw-bold" style="width: 150px;">
             <option value="">⚪ BIAS Итог</option>
             <option value="win" class="text-success">✅ Отработал</option>
@@ -60,52 +56,73 @@
 <div class="row g-4 mb-4">
     <div class="col-md-8">
         <div class="card shadow border-secondary bg-dark h-100">
-            <div class="card-header bg-black border-secondary py-2 small fw-bold text-info">ДНЕВНОЙ КОНТЕКСТ</div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label class="text-secondary small fw-bold mb-1">Вчерашнее закрытие</label>
-                    <textarea id="yesterday-close" class="form-control bg-black text-light border-secondary bias-textarea" placeholder="Свип, закрытие свечи..."></textarea>
+            <div class="card-header bg-black border-secondary py-2 small fw-bold text-info">ДНЕВНОЙ КОНТЕКСТ (HTF BIAS)</div>
+            <div class="card-body row g-3">
+                <div class="col-md-6">
+                    <label class="text-secondary small fw-bold mb-1">Вчерашнее закрытие (D1 / H4)</label>
+                    <textarea id="yesterday-close" class="form-control bg-black text-light border-secondary bias-textarea" placeholder="Был ли свип? Характер свечи..."></textarea>
                 </div>
-                <div>
+                <div class="col-md-6">
                     <label class="text-secondary small fw-bold mb-1">План на сегодня</label>
-                    <textarea id="today-plan" class="form-control bg-black text-light border-secondary bias-textarea" placeholder="Ожидания, таргеты..."></textarea>
+                    <textarea id="today-plan" class="form-control bg-black text-light border-secondary bias-textarea" placeholder="Ожидаю лонг/шорт, зоны интереса, таргеты..."></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="text-warning small fw-bold mb-1">Ключевая идея (Секвенция словами)</label>
+                    <textarea id="sequence-plan" class="form-control bg-black text-light border-warning bias-textarea" placeholder="Напр: Жду свип Азии, затем откат в OTE 15m и слом на 1m..."></textarea>
                 </div>
             </div>
         </div>
     </div>
+
     <div class="col-md-4">
         <div class="card shadow border-secondary bg-dark h-100">
             <div class="card-header bg-black border-secondary py-2 small fw-bold text-info">HTF СКРИНШОТ</div>
-            <div class="card-body p-2">
-                <div id="bt-dropzone" tabindex="0" class="smart-dropzone h-100 d-flex flex-column justify-content-center align-items-center p-3 text-center rounded position-relative outline-none" style="min-height: 220px;">
-                    <span id="bt-drop-text" class="text-muted small">🖱️ Ctrl+V для вставки</span>
+            <div class="card-body p-2 d-flex flex-column">
+                <div id="bt-dropzone" tabindex="0" class="smart-dropzone flex-grow-1 d-flex flex-column justify-content-center align-items-center p-3 text-center rounded position-relative outline-none" style="min-height: 180px;">
+                    <span id="bt-drop-text" class="text-muted small">
+                        🖱️ <b>Кликни сюда</b> и нажми <b>Ctrl+V</b><br>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="document.getElementById('bt-file-input').click();">📁 Выбрать файл</button>
+                    </span>
                     <input type="file" id="bt-file-input" class="d-none" accept="image/*">
                     <div id="bt-preview-container" class="d-none w-100 position-relative">
-                        <img id="bt-preview-img" src="" class="img-fluid rounded shadow" style="max-height: 200px; cursor: zoom-in;" onclick="window.open(this.src)">
+                        <img id="bt-preview-img" src="" class="img-fluid rounded border border-secondary shadow" style="max-height: 180px; object-fit: contain; cursor: zoom-in;" onclick="window.open(this.src)">
                         <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" onclick="clearImage(event)">✖</button>
                     </div>
                 </div>
-                <input type="text" id="bt-url-input" class="form-control form-control-sm bg-black text-light border-secondary mt-2" placeholder="TradingView URL">
+                <input type="text" id="bt-url-input" class="form-control form-control-sm bg-black text-light border-secondary mt-2" placeholder="Или вставь ссылку TradingView">
             </div>
         </div>
     </div>
 </div>
 
 <div class="card shadow border-secondary bg-dark mb-5">
+    <div class="card-header bg-black border-secondary d-flex justify-content-between align-items-center py-3">
+        <h6 class="text-info m-0">⏱️ Хронология сетапа (Sequence of Events)</h6>
+        <button class="btn btn-sm btn-outline-info fw-bold px-3 shadow-sm" onclick="addEventRow()">➕ Добавить событие</button>
+    </div>
+
+    <div class="bg-dark p-3 border-bottom border-secondary d-flex flex-wrap align-items-center gap-3" id="initial-trend-container">
+        </div>
+
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-dark grid-table m-0">
-                <thead class="bg-black text-center text-secondary small">
+            <table class="table table-dark table-hover m-0 align-middle">
+                <thead class="bg-black text-secondary small text-center border-bottom border-secondary">
                     <tr>
-                        <th class="py-3">Время (МСК)</th>
-                        <th class="py-3 border-start border-secondary">1м</th>
-                        <th class="py-3 border-start border-secondary">5м</th>
-                        <th class="py-3 border-start border-secondary">15м</th>
-                        <th class="py-3 border-start border-secondary">1ч</th>
+                        <th style="width: 140px;" class="py-3">Время (МСК)</th>
+                        <th style="width: 100px;" class="py-3 border-start border-secondary">ТФ</th>
+                        <th class="py-3 border-start border-secondary">Событие (Что произошло?)</th>
+                        <th style="width: 160px;" class="py-3 border-start border-secondary">Фибо (OTE)</th>
+                        <th style="width: 60px;" class="py-3 border-start border-secondary"></th>
                     </tr>
                 </thead>
-                <tbody id="structure-grid-body"></tbody>
+                <tbody id="sequence-body">
+                    </tbody>
             </table>
+        </div>
+        <div id="empty-msg" class="text-center py-5 text-muted">
+            Вы еще не добавили ни одного события.<br>
+            <button class="btn btn-sm btn-outline-secondary mt-3" onclick="addEventRow()">Добавить первый шаг</button>
         </div>
     </div>
 </div>
@@ -114,16 +131,15 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark border-secondary">
             <div class="modal-header border-secondary bg-black">
-                <h5 class="modal-title text-light">⚙️ Настройка торговых часов</h5>
+                <h5 class="modal-title text-light">⚙️ Настройки бэктеста</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <p class="text-secondary small mb-3">Выберите часы, которые хотите видеть в матрице бэктеста. Настройки сохранятся в браузере.</p>
-                <div class="hours-grid" id="hours-checkboxes">
-                    </div>
+                <h6 class="text-info small fw-bold mb-3">⏱ Видимые таймфреймы (Определяют панель тренда)</h6>
+                <div class="d-flex flex-wrap gap-3 mb-2" id="tf-checkboxes"></div>
             </div>
             <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-success w-100 fw-bold" onclick="saveSettings()">💾 Сохранить и обновить сетку</button>
+                <button type="button" class="btn btn-success w-100 fw-bold" onclick="saveSettings()">💾 Сохранить настройки</button>
             </div>
         </div>
     </div>
@@ -140,134 +156,166 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const all24Hours = [
-        '00:00 - 01:00', '01:00 - 02:00', '02:00 - 03:00', '03:00 - 04:00',
-        '04:00 - 05:00', '05:00 - 06:00', '06:00 - 07:00', '07:00 - 08:00',
-        '08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00',
-        '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00',
-        '16:00 - 17:00', '17:00 - 18:00', '18:00 - 19:00', '19:00 - 20:00',
-        '20:00 - 21:00', '21:00 - 22:00', '22:00 - 23:00', '23:00 - 00:00'
-    ];
-    const tfs = ['1m', '5m', '15m', '1h'];
+    const allTfs = ['1m', '5m', '15m', '1h', '4h', 'D1'];
+    let activeTfs = ['1h', '15m', '5m', '1m']; // Дефолтные ТФ
 
-    // Твои пресеты по умолчанию (если в памяти ничего нет)
-    const defaultHours = [
-        '03:00 - 04:00', '04:00 - 05:00', '05:00 - 06:00', // Азия
-        '09:00 - 10:00', // Франкфурт
-        '10:00 - 11:00', '11:00 - 12:00', // Лондон
-        '15:00 - 16:00', '16:00 - 17:00', '17:00 - 18:00'  // NY
-    ];
-
-    let activeHours = [];
     let currentImageFile = null;
-    let historyModal;
-    let settingsModal;
+    let historyModal, settingsModal;
 
     document.addEventListener("DOMContentLoaded", () => {
         document.getElementById('backtest-date').valueAsDate = new Date();
         historyModal = new bootstrap.Modal(document.getElementById('historyModal'));
         settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
 
-        // Загружаем часы из памяти или берем дефолтные
-        const savedHours = localStorage.getItem('bt_active_hours');
-        activeHours = savedHours ? JSON.parse(savedHours) : defaultHours;
+        const savedTfs = localStorage.getItem('bt_active_tfs');
+        if (savedTfs) activeTfs = JSON.parse(savedTfs);
 
         setupImageDropzone();
-        renderStructureGrid();
+        renderInitialTrends();
         loadGridData();
     });
 
-    // Умное определение сессии по времени
-    function getSessionName(hourStr) {
-        const h = parseInt(hourStr.substring(0, 2));
-        if (h >= 2 && h <= 6) return '🌙 Азия';
-        if (h >= 7 && h <= 9) return '🥨 Франкфурт';
-        if (h >= 10 && h <= 13) return '☕ Лондон';
-        if (h >= 14 && h <= 18) return '🗽 Нью-Йорк';
-        return '🌃 Вне основных сессий';
-    }
+    // --- ЛОГИКА ПАНЕЛИ ТРЕНДОВ ---
+    function renderInitialTrends() {
+        const container = document.getElementById('initial-trend-container');
+        let html = `<span class="text-info small fw-bold me-2">📍 Стартовый тренд (Синхронизация ТФ):</span>`;
 
-    function renderStructureGrid() {
-        const getCellHTML = (time, tf) => `
-            <div class="d-flex justify-content-between align-items-center mb-1 px-1">
-                <div class="form-check m-0"><input class="form-check-input bg-black border-secondary sweep-cb" type="checkbox" data-time="${time}" data-tf="${tf}"><label class="text-light check-label ms-1 small">Swp</label></div>
-                <div class="form-check m-0"><input class="form-check-input bg-black border-secondary break-cb" type="checkbox" data-time="${time}" data-tf="${tf}"><label class="text-light check-label ms-1 small">BOS</label></div>
-            </div>
-            <select class="form-select bg-black text-secondary border-secondary compact-select text-center dir-select" data-time="${time}" data-tf="${tf}" onchange="this.classList.toggle('text-info', this.value!=='');">
-                <option value="">Направление</option><option value="Вверх">📈 Лонг</option><option value="Вниз">📉 Шорт</option><option value="Пробитие">💥 BOS</option><option value="Боковик">↔️ Боковик</option>
-            </select>`;
-
-        let html = '';
-        let currentSession = '';
-
-        // Сортируем выбранные часы по времени
-        activeHours.sort().forEach(time => {
-            let sessionName = getSessionName(time);
-            // Если сессия сменилась, добавляем красивый заголовок
-            if (sessionName !== currentSession) {
-                html += `<tr class="session-header"><td colspan="5" class="text-center py-1">${sessionName}</td></tr>`;
-                currentSession = sessionName;
-            }
-            html += `<tr><td class="text-center align-middle small">${time}</td>` +
-                    tfs.map(tf => `<td class="p-2 border-start border-secondary">${getCellHTML(time, tf)}</td>`).join('') + `</tr>`;
-        });
-
-        if (activeHours.length === 0) {
-            html = `<tr><td colspan="5" class="text-center py-5 text-muted">Вы не выбрали ни одного часа в настройках ⚙️</td></tr>`;
-        }
-
-        document.getElementById('structure-grid-body').innerHTML = html;
-
-        // После перерисовки сетки нужно восстановить данные, если они были загружены
-        loadGridData();
-    }
-
-    // --- ЛОГИКА НАСТРОЕК ---
-    function openSettings() {
-        let html = '';
-        all24Hours.forEach(time => {
-            const isChecked = activeHours.includes(time) ? 'checked' : '';
-            const isKillzone = ['03', '04', '05', '09', '10', '11', '15', '16', '17'].includes(time.substring(0,2));
-            const textClass = isKillzone ? 'text-info fw-bold' : 'text-light';
-
+        activeTfs.forEach(tf => {
             html += `
-                <div class="form-check">
-                    <input class="form-check-input bg-dark border-secondary hour-setting-cb" type="checkbox" value="${time}" id="cb-${time}" ${isChecked}>
-                    <label class="form-check-label small ${textClass}" for="cb-${time}">${time.substring(0,5)}</label>
+                <div class="input-group input-group-sm w-auto shadow-sm">
+                    <span class="input-group-text bg-black text-secondary border-secondary fw-bold" style="width: 45px; justify-content: center;">${tf}</span>
+                    <select class="form-select bg-black text-light border-secondary init-trend-select fw-bold" data-tf="${tf}" onchange="updateTrendColor(this)" style="width: 110px;">
+                        <option value="" class="text-secondary">--</option>
+                        <option value="Лонг" class="text-success">📈 Лонг</option>
+                        <option value="Шорт" class="text-danger">📉 Шорт</option>
+                        <option value="Боковик" class="text-warning">↔️ Рендж</option>
+                    </select>
                 </div>
             `;
         });
-        document.getElementById('hours-checkboxes').innerHTML = html;
+        container.innerHTML = html;
+    }
+
+    function updateTrendColor(selectElement) {
+        selectElement.style.color = selectElement.value === 'Лонг' ? '#198754' : (selectElement.value === 'Шорт' ? '#dc3545' : (selectElement.value === 'Боковик' ? '#ffc107' : '#f8f9fa'));
+    }
+
+    // --- НАСТРОЙКИ ---
+    function openSettings() {
+        let tfHtml = '';
+        allTfs.forEach(tf => {
+            const isChecked = activeTfs.includes(tf) ? 'checked' : '';
+            tfHtml += `<div class="form-check form-check-inline"><input class="form-check-input bg-dark border-secondary tf-setting-cb" type="checkbox" value="${tf}" id="cb-tf-${tf}" ${isChecked}><label class="form-check-label small text-light fw-bold" for="cb-tf-${tf}">${tf}</label></div>`;
+        });
+        document.getElementById('tf-checkboxes').innerHTML = tfHtml;
         settingsModal.show();
     }
 
     function saveSettings() {
-        activeHours = [];
-        document.querySelectorAll('.hour-setting-cb:checked').forEach(cb => activeHours.push(cb.value));
-        localStorage.setItem('bt_active_hours', JSON.stringify(activeHours));
+        activeTfs = [];
+        document.querySelectorAll('.tf-setting-cb:checked').forEach(cb => activeTfs.push(cb.value));
+        if (activeTfs.length === 0) activeTfs = ['15m', '5m', '1m'];
+        localStorage.setItem('bt_active_tfs', JSON.stringify(activeTfs));
         settingsModal.hide();
-        renderStructureGrid();
+        renderInitialTrends();
+        loadGridData(); // Перезагружаем данные для обновленных ТФ
+    }
+
+    // --- ЛОГИКА КОНСТРУКТОРА СЕКВЕНЦИИ ---
+    // --- ЛОГИКА КОНСТРУКТОРА СЕКВЕНЦИИ ---
+    function addEventRow(data = null) {
+        const container = document.getElementById('sequence-body');
+        document.getElementById('empty-msg').classList.add('d-none');
+
+        let tfOptions = activeTfs.map(tf => `<option value="${tf}" ${data?.tf === tf ? 'selected' : ''}>${tf}</option>`).join('');
+
+        const row = document.createElement('tr');
+        row.className = 'event-row';
+        row.innerHTML = `
+            <td class="p-2">
+                <input type="time" class="form-control bg-black text-light border-secondary text-center fw-bold ev-time" value="${data?.time || ''}">
+            </td>
+            <td class="p-2 border-start border-secondary">
+                <select class="form-select bg-black text-light border-secondary text-center fw-bold ev-tf">
+                    ${tfOptions}
+                </select>
+            </td>
+            <td class="p-2 border-start border-secondary">
+                <select class="form-select bg-black text-info border-secondary fw-bold ev-type" onchange="this.classList.toggle('text-success', this.value === 'ENTRY');">
+                    <option value="" class="text-secondary">-- Выбери событие --</option>
+                    <option value="HTF_POI" ${data?.type === 'HTF_POI' ? 'selected' : ''}>📍 Касание HTF POI</option>
+                    <option value="SWEEP_TOP" ${data?.type === 'SWEEP_TOP' ? 'selected' : ''}>🧹 Свип СВЕРХУ (BSL)</option>
+                    <option value="SWEEP_BOTTOM" ${data?.type === 'SWEEP_BOTTOM' ? 'selected' : ''}>🧹 Свип СНИЗУ (SSL)</option>
+                    <option value="BOS" ${data?.type === 'BOS' ? 'selected' : ''}>💥 BOS / MSS (Слом)</option>
+                    <option value="RETRACEMENT" ${data?.type === 'RETRACEMENT' ? 'selected' : ''}>📉 Откат</option>
+                    <option value="CONSOLIDATION" ${data?.type === 'CONSOLIDATION' ? 'selected' : ''}>↔️ Боковик (Range)</option>
+                    <option value="ENTRY" ${data?.type === 'ENTRY' ? 'selected' : ''} class="text-success">🚀 ВХОД В СДЕЛКУ</option>
+                </select>
+            </td>
+            <td class="p-2 border-start border-secondary">
+                <select class="form-select bg-black text-warning border-secondary ev-fibo">
+                    <option value="" class="text-secondary">Без Фибо</option>
+                    <option value="0.5" ${data?.fibo === '0.5' ? 'selected' : ''}>0.5 (EQ)</option>
+                    <option value="0.618" ${data?.fibo === '0.618' ? 'selected' : ''}>0.618 (OTE)</option>
+                    <option value="0.705" ${data?.fibo === '0.705' ? 'selected' : ''}>0.705 (OTE)</option>
+                    <option value="0.79" ${data?.fibo === '0.79' ? 'selected' : ''}>0.79 (OTE)</option>
+                    <option value="0.886" ${data?.fibo === '0.886' ? 'selected' : ''}>0.886</option>
+                </select>
+            </td>
+            <td class="p-2 border-start border-secondary text-center">
+                <button class="btn btn-sm btn-outline-danger border-0" onclick="removeEventRow(this)" title="Удалить шаг">✖</button>
+            </td>
+        `;
+        container.appendChild(row);
+
+        if (data?.type === 'ENTRY') row.querySelector('.ev-type').classList.add('text-success');
+    }
+
+    function removeEventRow(btn) {
+        btn.closest('tr').remove();
+        if (document.querySelectorAll('.event-row').length === 0) {
+            document.getElementById('empty-msg').classList.remove('d-none');
+        }
     }
 
     // --- СОХРАНЕНИЕ / ЗАГРУЗКА ---
     async function saveGridData() {
         const dateStr = document.getElementById('backtest-date').value;
-        const btn = event.target; btn.disabled = true;
-        let gridData = { day_result: document.getElementById('day-result').value, tv_url: document.getElementById('bt-url-input').value };
+        if (!dateStr) return alert("Выберите дату!");
 
-        document.querySelectorAll('.dir-select').forEach(sel => {
-            const time = sel.dataset.time, tf = sel.dataset.tf;
-            if(!gridData[time]) gridData[time] = {};
-            gridData[time][tf] = {
-                swp: document.querySelector(`.sweep-cb[data-time="${time}"][data-tf="${tf}"]`).checked,
-                brk: document.querySelector(`.break-cb[data-time="${time}"][data-tf="${tf}"]`).checked,
-                dir: sel.value
-            };
+        const btn = event.target;
+        const origText = btn.innerText;
+        btn.disabled = true; btn.innerText = "Сохраняем...";
+
+        // 1. Собираем панель трендов
+        let initial_trends = {};
+        document.querySelectorAll('.init-trend-select').forEach(sel => {
+            initial_trends[sel.dataset.tf] = sel.value;
         });
+
+        // 2. Собираем секвенцию
+        let sequence = [];
+        document.querySelectorAll('.event-row').forEach(row => {
+            sequence.push({
+                time: row.querySelector('.ev-time').value,
+                tf: row.querySelector('.ev-tf').value,
+                type: row.querySelector('.ev-type').value,
+                fibo: row.querySelector('.ev-fibo').value
+            });
+        });
+
+        let gridData = {
+            day_result: document.getElementById('day-result').value,
+            tv_url: document.getElementById('bt-url-input').value,
+            sequence_plan: document.getElementById('sequence-plan').value,
+            initial_trends: initial_trends, // Сохраняем тренды
+            sequence_data: sequence // Сохраняем события
+        };
 
         const fd = new FormData();
         fd.append('date', dateStr);
@@ -278,69 +326,121 @@
 
         try {
             const res = await fetch(`/backtest_api/`, { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd });
-            alert(res.ok ? "✅ День успешно сохранен!" : "Ошибка сохранения");
+            alert(res.ok ? "✅ Хронология дня успешно сохранена!" : "Ошибка сохранения");
         } catch(e) { alert("Ошибка сети"); }
-        finally { btn.disabled = false; }
+        finally { btn.disabled = false; btn.innerText = origText; }
     }
 
     async function loadGridData() {
         const dateStr = document.getElementById('backtest-date').value;
-        const res = await fetch(`/backtest_api/?date=${dateStr}`);
-        const data = await res.json();
+        if (!dateStr) return;
 
-        clearGridElements(); // Очищаем визуальную сетку перед заполнением
+        try {
+            const res = await fetch(`/backtest_api/?date=${dateStr}`);
+            const data = await res.json();
 
-        if (data.grid_data) {
-            document.getElementById('yesterday-close').value = data.yesterday_close || '';
-            document.getElementById('today-plan').value = data.today_plan || '';
-            document.getElementById('day-result').value = data.grid_data.day_result || '';
+            // Очистка формы
+            document.getElementById('sequence-body').innerHTML = '';
+            document.getElementById('empty-msg').classList.remove('d-none');
+            document.getElementById('yesterday-close').value = '';
+            document.getElementById('today-plan').value = '';
+            document.getElementById('sequence-plan').value = '';
+            document.getElementById('day-result').value = '';
+            document.querySelectorAll('.init-trend-select').forEach(sel => { sel.value = ''; updateTrendColor(sel); });
+            clearImage();
 
-            if (data.chart_image_url) setPreview(data.chart_image_url);
-            else if (data.grid_data.tv_url) { document.getElementById('bt-url-input').value = data.grid_data.tv_url; setPreview(data.grid_data.tv_url); }
+            if (data.grid_data) {
+                document.getElementById('yesterday-close').value = data.yesterday_close || '';
+                document.getElementById('today-plan').value = data.today_plan || '';
+                document.getElementById('sequence-plan').value = data.grid_data.sequence_plan || '';
+                document.getElementById('day-result').value = data.grid_data.day_result || '';
 
-            Object.keys(data.grid_data).forEach(time => {
-                if(typeof data.grid_data[time] === 'object') {
-                    Object.keys(data.grid_data[time]).forEach(tf => {
-                        const cell = data.grid_data[time][tf];
-                        const s = document.querySelector(`.sweep-cb[data-time="${time}"][data-tf="${tf}"]`); if(s) s.checked = cell.swp;
-                        const b = document.querySelector(`.break-cb[data-time="${time}"][data-tf="${tf}"]`); if(b) b.checked = cell.brk;
-                        const d = document.querySelector(`.dir-select[data-time="${time}"][data-tf="${tf}"]`); if(d) { d.value = cell.dir; d.classList.toggle('text-info', d.value!==''); }
+                if (data.chart_image_url) {
+                    setPreview(data.chart_image_url);
+                } else if (data.grid_data.tv_url) {
+                    document.getElementById('bt-url-input').value = data.grid_data.tv_url;
+                    setPreview(data.grid_data.tv_url);
+                }
+
+                // Восстанавливаем панель трендов
+                if (data.grid_data.initial_trends) {
+                    document.querySelectorAll('.init-trend-select').forEach(sel => {
+                        const val = data.grid_data.initial_trends[sel.dataset.tf] || '';
+                        sel.value = val;
+                        updateTrendColor(sel);
                     });
                 }
-            });
-        }
+
+                // Восстанавливаем секвенцию
+                if (data.grid_data.sequence_data && data.grid_data.sequence_data.length > 0) {
+                    data.grid_data.sequence_data.forEach(ev => addEventRow(ev));
+                }
+            }
+        } catch (e) { console.error("Ошибка загрузки", e); }
     }
 
-    // --- ОСТАЛЬНАЯ ЛОГИКА (БЕЗ ИЗМЕНЕНИЙ) ---
+    // --- МОДАЛКА ИСТОРИИ И СКРИНШОТЫ ---
     async function openHistory() {
         historyModal.show();
         const body = document.getElementById('history-modal-body');
-        body.innerHTML = '<div class="p-5 text-center text-muted">Загрузка...</div>';
-        const res = await fetch(`/backtest_api/`);
-        const history = await res.json();
+        body.innerHTML = '<div class="text-center text-muted py-5">Загрузка данных...</div>';
 
-        let wins = 0, losses = 0, flats = 0;
-        history.forEach(h => { if(h.result==='win') wins++; else if(h.result==='loss') losses++; else if(h.result==='flat') flats++; });
+        try {
+            const res = await fetch(`/backtest_api/`);
+            const history = await res.json();
 
-        let html = `<div class="p-3 bg-black border-bottom border-secondary row text-center g-2 mx-0">
-            <div class="col-4"><div class="p-2 bg-dark rounded border border-success"><small class="text-success">✅ Верно</small><div class="fs-4 fw-bold">${wins}</div></div></div>
-            <div class="col-4"><div class="p-2 bg-dark rounded border border-danger"><small class="text-danger">❌ Ошибки</small><div class="fs-4 fw-bold">${losses}</div></div></div>
-            <div class="col-4"><div class="p-2 bg-dark rounded border border-warning"><small class="text-warning">↔️ Флэт</small><div class="fs-4 fw-bold">${flats}</div></div></div>
-        </div><div class="p-4" style="background:#121212;"><h6 class="text-secondary small fw-bold mb-3">📅 ТЕПЛОВАЯ КАРТА (🔵 = ТОРГОВЫЙ ДЕНЬ)</h6><div class="heatmap-grid">`;
+            if (history.length === 0) { body.innerHTML = '<div class="text-center text-muted py-5">Вы еще не сохраняли дни бэктеста.</div>'; return; }
 
-        history.sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(h => {
-            const color = h.result==='win' ? 'heatmap-win' : h.result==='loss' ? 'heatmap-loss' : h.result==='flat' ? 'heatmap-flat' : 'heatmap-none';
-            const tradeClass = h.has_real_trades ? 'has-trades' : '';
-            html += `<div class="heatmap-box ${color} ${tradeClass}" onclick="loadHistoryDay('${h.date}')" title="${h.date}"> ${h.date.split('-')[2]} </div>`;
-        });
-        body.innerHTML = html + '</div></div>';
+            let wins = 0, losses = 0, flats = 0;
+            history.forEach(h => { if (h.result === 'win') wins++; else if (h.result === 'loss') losses++; else if (h.result === 'flat') flats++; });
+
+            let html = `
+                <div class="p-3 bg-black border-bottom border-secondary row text-center g-2 mb-3 mx-0">
+                    <div class="col-4"><div class="p-2 bg-dark rounded border border-success"><div class="text-success small">Верно</div><div class="fs-5 fw-bold text-success">${wins}</div></div></div>
+                    <div class="col-4"><div class="p-2 bg-dark rounded border border-danger"><div class="text-danger small">Ошибки</div><div class="fs-5 fw-bold text-danger">${losses}</div></div></div>
+                    <div class="col-4"><div class="p-2 bg-dark rounded border border-warning"><div class="text-warning small">Флэт</div><div class="fs-5 fw-bold text-warning">${flats}</div></div></div>
+                </div>
+                <div class="p-4" style="background-color: #121212;">
+                    <div class="d-flex justify-content-between align-items-center mb-3"><h6 class="text-secondary m-0">📅 Тепловая карта бэктеста</h6><span class="badge bg-dark border border-info text-info"><span style="color:#0dcaf0">🔵</span> — Была реальная торговля</span></div>
+                    <div class="heatmap-grid">`;
+
+            history.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(h => {
+                let colorClass = h.result === 'win' ? 'heatmap-win' : h.result === 'loss' ? 'heatmap-loss' : h.result === 'flat' ? 'heatmap-flat' : 'heatmap-none';
+                const tradeClass = h.has_real_trades ? 'has-trades' : '';
+                const d = new Date(h.date);
+                const tooltipDate = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+                html += `<div class="heatmap-box ${colorClass} ${tradeClass}" title="${tooltipDate}" onclick="loadDateFromHistory('${h.date}')">${d.getDate()}</div>`;
+            });
+
+            body.innerHTML = html + `</div></div>`;
+        } catch (e) { body.innerHTML = '<div class="text-center text-danger py-5">Ошибка загрузки истории</div>'; }
     }
 
-    function loadHistoryDay(date) { document.getElementById('backtest-date').value = date; historyModal.hide(); loadGridData(); }
-    function setupImageDropzone() { const dz = document.getElementById('bt-dropzone'); const urlInput = document.getElementById('bt-url-input'); dz.addEventListener('paste', e => { e.preventDefault(); const items = e.clipboardData.items; for(let i of items) { if(i.kind === 'file' && i.type.startsWith('image/')) { setPreview(i.getAsFile()); break; } else if (i.kind === 'string' && i.type === 'text/plain') { i.getAsString(text => { if (text.includes('tradingview.com/x/')) { urlInput.value = text; setPreview(text); } }); } } }); urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPreview(e.target.value); }); }
-    function setPreview(f) { const pr = document.getElementById('bt-preview-container'); const img = document.getElementById('bt-preview-img'); if(typeof f==='string'){ img.src = f; currentImageFile=null; } else { img.src=URL.createObjectURL(f); currentImageFile=f; document.getElementById('bt-url-input').value = ''; } pr.classList.remove('d-none'); document.getElementById('bt-drop-text').classList.add('d-none'); }
-    function clearImage(e) { if(e) e.stopPropagation(); currentImageFile=null; document.getElementById('bt-url-input').value = ''; document.getElementById('bt-preview-container').classList.add('d-none'); document.getElementById('bt-drop-text').classList.remove('d-none'); }
-    function clearGridElements() { document.querySelectorAll('.sweep-cb, .break-cb').forEach(c=>c.checked=false); document.querySelectorAll('.dir-select').forEach(s=>{s.value=''; s.classList.remove('text-info');}); document.getElementById('yesterday-close').value=''; document.getElementById('today-plan').value=''; document.getElementById('day-result').value=''; clearImage(); }
-    function clearGrid() { if(confirm("Точно очистить форму?")) clearGridElements(); }
+    function loadDateFromHistory(dateStr) { document.getElementById('backtest-date').value = dateStr; historyModal.hide(); loadGridData(); }
+
+    function setupImageDropzone() {
+        const dropzone = document.getElementById(`bt-dropzone`), fileInput = document.getElementById(`bt-file-input`), urlInput = document.getElementById(`bt-url-input`);
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) setPreview(e.target.files[0]); });
+        dropzone.addEventListener('paste', (e) => {
+            e.preventDefault(); const items = (e.clipboardData || window.clipboardData).items;
+            for (let i of items) {
+                if (i.kind === 'file' && i.type.startsWith('image/')) { setPreview(i.getAsFile()); break; }
+                else if (i.kind === 'string' && i.type === 'text/plain') { i.getAsString(text => { if (text.includes('tradingview.com/x/')) { urlInput.value = text; setPreview(text); } }); }
+            }
+        });
+        urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPreview(e.target.value); });
+    }
+
+    function setPreview(fileOrUrl) {
+        const previewContainer = document.getElementById(`bt-preview-container`), previewImg = document.getElementById(`bt-preview-img`), dropText = document.getElementById(`bt-drop-text`);
+        if (typeof fileOrUrl === 'string') { previewImg.src = fileOrUrl; currentImageFile = null; }
+        else { previewImg.src = URL.createObjectURL(fileOrUrl); currentImageFile = fileOrUrl; document.getElementById(`bt-url-input`).value = ''; }
+        previewContainer.classList.remove('d-none'); dropText.classList.add('d-none'); document.getElementById('bt-dropzone').classList.remove('p-3');
+    }
+
+    function clearImage(event) {
+        if(event) event.stopPropagation(); currentImageFile = null; document.getElementById(`bt-file-input`).value = ''; document.getElementById(`bt-url-input`).value = '';
+        document.getElementById(`bt-preview-container`).classList.add('d-none'); document.getElementById(`bt-drop-text`).classList.remove('d-none'); document.getElementById('bt-dropzone').classList.add('p-3'); document.getElementById(`bt-preview-img`).src = '';
+    }
 </script>
 {% endblock %}
