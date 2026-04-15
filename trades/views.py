@@ -51,6 +51,8 @@ class PlaybookSerializer(serializers.ModelSerializer):
 
 
 class PlaybookViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]  # 👈 ДОБАВИТЬ ЭТУ СТРОК
+
     def list(self, request):
         patterns = PlaybookPattern.objects.filter(user=request.user).order_by('-created_at')
         data = [{
@@ -577,7 +579,6 @@ class TradingRuleViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-@login_required
 def faq_view(request):
     return render(request, 'faq.html')
 
@@ -732,8 +733,6 @@ def backtest_grid_api(request):
             obj.save()
         return Response({"message": "✅ Сохранено!"})
 
-# Добавь куда-нибудь в views.py
-@login_required
 def backtest_page(request):
     return render(request, 'backtest.html') # Имя файла, куда ты сохранил HTML с таблицей бэктеста
 

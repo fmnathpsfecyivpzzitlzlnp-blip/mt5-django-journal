@@ -128,7 +128,12 @@ STATIC_URL = 'static/'
 CORS_ALLOW_ALL_ORIGINS = True
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-# Куда переходить после логина (на главную страницу API)
+
+# --- АВТОРИЗАЦИЯ И СЕССИИ ---
 LOGIN_REDIRECT_URL = '/api/trades/'
-# Куда переходить после выхода
 LOGOUT_REDIRECT_URL = '/api-auth/login/'
+LOGIN_URL = '/api-auth/login/'
+
+# Удерживаем сессию 30 дней
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_AGE = 2592000

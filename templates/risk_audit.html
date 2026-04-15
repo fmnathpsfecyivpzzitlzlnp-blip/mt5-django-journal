@@ -31,6 +31,16 @@
                 <option value="week">⏳ Последние 7 дней</option>
             </select>
         </div>
+        <div class="col-md-2">
+            <select id="filt-day" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
+                <option value="all">📅 Любой день</option>
+                <option value="1">Понедельник</option>
+                <option value="2">Вторник</option>
+                <option value="3">Среда</option>
+                <option value="4">Четверг</option>
+                <option value="5">Пятница</option>
+            </select>
+        </div>
     </div>
 </div>
 
@@ -127,7 +137,7 @@
     if(localStorage.getItem('shared_mag')) document.getElementById('filt-magic').value = localStorage.getItem('shared_mag');
     if(localStorage.getItem('shared_com')) document.getElementById('filt-comment').value = localStorage.getItem('shared_com');
     if(localStorage.getItem('shared_per')) document.getElementById('filt-period').value = localStorage.getItem('shared_per');
-
+    if(localStorage.getItem('shared_day')) document.getElementById('filt-day').value = localStorage.getItem('shared_day');
     // 3. Запускаем отрисовку с учетом восстановленных фильтров
     applyFilters();
 }
@@ -138,6 +148,8 @@
     let mag = document.getElementById('filt-magic').value.toLowerCase();
     let com = document.getElementById('filt-comment').value.toLowerCase();
     let per = document.getElementById('filt-period').value;
+    // 👇 НОВОЕ: Получаем день недели
+    let dayFilter = document.getElementById('filt-day').value;
 
     // 👇 СОХРАНЯЕМ ФИЛЬТРЫ В ПАМЯТЬ БРАУЗЕРА 👇
     localStorage.setItem('shared_exec', exec);
@@ -163,8 +175,17 @@
         if(per === 'month') { let m = new Date(); m.setDate(now.getDate() - 30); if(td < m) dMatch = false; }
         else if(per === 'week') { let w = new Date(); w.setDate(now.getDate() - 7); if(td < w) dMatch = false; }
 
-        // 👇 ИСПРАВЛЕННЫЙ РЕТУРН (Добавлено && matchExec) 👇
-        return sMatch && mMatch && cMatch && dMatch && matchExec;
+                // 👇 НОВОЕ: Логика фильтрации по дню недели
+        let dayMatch = true;
+        if (dayFilter !== 'all') {
+            // В JS getDay() возвращает: 0 - Вс, 1 - Пн, 2 - Вт ... 6 - Сб
+            if (td.getDay() !== parseInt(dayFilter)) {
+                dayMatch = false;
+            }
+        }
+
+        // Возвращаем результат со всеми проверками
+        return sMatch && mMatch && cMatch && dMatch && matchExec && dayMatch;
     });
 
     // Эти вызовы зависят от страницы (Аналитика или Аудит)
@@ -243,6 +264,5 @@
         document.getElementById('week-matrix-body').innerHTML = html;
     }
 
-    document.addEventListener("DOMContentLoaded", initPage);
 </script>
 {% endblock %}

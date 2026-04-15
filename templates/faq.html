@@ -4,6 +4,20 @@
 <style>
     .smart-dropzone:focus { border-color: #0dcaf0 !important; background-color: rgba(13, 202, 240, 0.1) !important; box-shadow: 0 0 15px rgba(13, 202, 240, 0.2); }
     .faq-category-header { background: linear-gradient(90deg, #1a1a1a, #2a2a2a, #1a1a1a); border-bottom: 2px solid #0dcaf0; }
+
+    /* НОВЫЕ СТИЛИ ДЛЯ ДИНАМИЧЕСКОГО ТЕКСТА */
+    #faq-container {
+        /* Дефолтные значения (перезапишутся из localStorage при загрузке) */
+        --current-font-size: 14px;
+        --current-text-color: #ffffff;
+    }
+
+    .dynamic-caption {
+        font-size: var(--current-font-size) !important;
+        color: var(--current-text-color) !important;
+        transition: color 0.3s, font-size 0.3s;
+        white-space: pre-wrap; /* Сохраняем переносы строк */
+    }
 </style>
 {% endblock %}
 
@@ -11,6 +25,25 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📚 База Знаний (FAQ)</h4>
     <button class="btn btn-info fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#addTopicModal">➕ Новый вопрос</button>
+</div>
+
+<div class="card shadow p-2 mb-3 border-info bg-dark">
+    <div class="d-flex gap-3 flex-wrap align-items-center">
+        <span class="text-info fw-bold small">🎨 Текст ответов:</span>
+        <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('12px')">12px</button>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('14px')">14px</button>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('18px')">18px</button>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('22px')">22px</button>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('28px')">28px</button>
+        </div>
+        <div class="d-flex gap-1 border-start border-secondary ps-3">
+            <button class="btn btn-sm btn-outline-light py-0" onclick="changeTextColor('#ffffff')">Белый</button>
+            <button class="btn btn-sm btn-outline-warning py-0" onclick="changeTextColor('#FFC107')">Желтый</button>
+            <button class="btn btn-sm btn-outline-success py-0" onclick="changeTextColor('#4CAF50')">Зеленый</button>
+            <button class="btn btn-sm btn-outline-primary py-0" onclick="changeTextColor('#4dabf7')">Синий</button>
+        </div>
+    </div>
 </div>
 
 <div class="card bg-dark border-secondary mb-4 shadow-sm">
@@ -43,29 +76,72 @@
     </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
     let faqData = [];
     let filesDict = {};
-    let openAccordions = []; // 👈 ДОБАВИЛИ ПАМЯТЬ ДЛЯ ОТКРЫТЫХ ВКЛАДОК
+    let openAccordions = [];
 
-    document.addEventListener("DOMContentLoaded", () => {
+    // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ЦВЕТА И ШРИФТА
+    let globalFontSize = localStorage.getItem('journalFontSize') || '14px';
+    let globalTextColor = localStorage.getItem('journalTextColor') || '#ffffff';
+
+    // 👇 1. ИСПОЛЬЗУЕМ initPage ВМЕСТО DOMContentLoaded 👇
+    // base.html автоматически вызовет эту функцию только если пользователь авторизован!
+    function initPage() {
+        applyGlobalStyles();
         loadFAQ();
-    });
+    }
+
+    // Функция применения стилей к контейнеру FAQ
+    function applyGlobalStyles() {
+        const container = document.getElementById('faq-container');
+        if (container) {
+            container.style.setProperty('--current-font-size', globalFontSize);
+            container.style.setProperty('--current-text-color', globalTextColor);
+        }
+    }
+
+    // Функции вызываемые по кнопкам
+    function changeFontSize(size) {
+        globalFontSize = size;
+        localStorage.setItem('journalFontSize', size);
+        applyGlobalStyles();
+    }
+
+    function changeTextColor(color) {
+        globalTextColor = color;
+        localStorage.setItem('journalTextColor', color);
+        applyGlobalStyles();
+    }
 
     async function loadFAQ() {
-        // 👇 1. СОХРАНЯЕМ СОСТОЯНИЕ: запоминаем ID всех открытых вкладок
         openAccordions = [];
         document.querySelectorAll('.accordion-collapse.show').forEach(el => {
             openAccordions.push(el.id);
         });
 
-        const res = await fetch(API_BASE + 'faq_topics/');
-        faqData = await res.json();
+        try {
+            const res = await fetch(API_BASE + 'faq_topics/');
 
-        // Вызываем поиск (он сам решит, рендерить всё или только результаты фильтра)
-        applyFAQSearch();
+            // 👇 2. ЗАЩИТА ОТ 403 И 500 ОШИБОК 👇
+            if (!res.ok) {
+                if (res.status === 401 || res.status === 403) {
+                    alert("Сессия устарела. Страница будет перезагружена.");
+                    window.location.reload();
+                }
+                return;
+            }
+
+            faqData = await res.json();
+
+            // Если с сервера пришла дичь, делаем пустой массив
+            if (!Array.isArray(faqData)) faqData = [];
+
+            applyFAQSearch();
+        } catch (e) {
+            console.error("Ошибка сети:", e);
+        }
     }
 
     function applyFAQSearch() {
@@ -88,7 +164,9 @@
 
     function renderFAQ(dataToRender) {
         const container = document.getElementById('faq-container');
-        if (dataToRender.length === 0) {
+
+        // 👇 3. ЗАЩИТА ОТ ПАДЕНИЯ forEach 👇
+        if (!Array.isArray(dataToRender) || dataToRender.length === 0) {
             container.innerHTML = '<div class="text-center text-muted p-5">Ничего не найдено.</div>';
             return;
         }
@@ -117,7 +195,9 @@
                                 ${t.blocks.map(b => `
                                     <div class="card bg-dark border-secondary mb-3 shadow">
                                         ${b.image ? `<img src="${b.image}" class="card-img-top border-bottom border-secondary" style="max-height: 400px; object-fit: contain; cursor: pointer;" onclick="window.open('${b.image}')">` : ''}
-                                        ${b.text ? `<div class="card-body p-3"><p class="m-0 text-light" style="white-space: pre-wrap;">${b.text}</p></div>` : ''}
+
+                                        ${b.text ? `<div class="card-body p-3"><p class="m-0 dynamic-caption">${b.text}</p></div>` : ''}
+
                                         <div class="card-footer p-1 bg-dark text-end border-top border-secondary small">
                                             <button class="btn btn-sm btn-link text-danger py-0 px-1 text-decoration-none" onclick="deleteBlock(${b.id})">🗑️ Удалить блок</button>
                                         </div>
@@ -157,7 +237,6 @@
         container.innerHTML = html;
         setupAllDropzones(dataToRender);
 
-        // 👇 2. ВОССТАНАВЛИВАЕМ СОСТОЯНИЕ: Открываем вкладки, которые были открыты до рендера
         openAccordions.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
@@ -173,34 +252,49 @@
         const q = document.getElementById('topic-question').value.trim();
         if(!q) return alert("Введи вопрос!");
 
-        const scrollPos = window.scrollY; // Запоминаем скролл
+        const scrollPos = window.scrollY;
 
-        await fetch(API_BASE + 'faq_topics/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify({ category: cat, question: q }) });
+        try {
+            const res = await fetch(API_BASE + 'faq_topics/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ category: cat, question: q }),
+                credentials: 'same-origin' // 👈 ВОТ ЭТА СТРОЧКА СПАСЕТ ОТ 403
+            });
 
-        // ❌ ЗАКРЫТИЕ ОТКЛЮЧЕНО: Модалка останется открытой, как ты и просил
-        // bootstrap.Modal.getInstance(document.getElementById('addTopicModal')).hide();
+            if (!res.ok) {
+                const errText = await res.text();
+                alert(`Ошибка сохранения (${res.status}). Возможно, сессия устарела. Обновите страницу.`);
+                return;
+            }
 
-        document.getElementById('topic-question').value = '';
-
-        await loadFAQ();
-        window.scrollTo(0, scrollPos); // Возвращаем скролл на место
+            document.getElementById('topic-question').value = '';
+            await loadFAQ();
+            window.scrollTo(0, scrollPos);
+        } catch(e) {
+            alert("Ошибка сети!");
+        }
     }
 
     async function deleteTopic(id) {
         if(confirm("Удалить всё?")) {
             const scrollPos = window.scrollY;
-            await fetch(API_BASE + `faq_topics/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
-            await loadFAQ();
-            window.scrollTo(0, scrollPos);
+            const res = await fetch(API_BASE + `faq_topics/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            if(res.ok) {
+                await loadFAQ();
+                window.scrollTo(0, scrollPos);
+            }
         }
     }
 
     async function deleteBlock(id) {
         if(confirm("Удалить блок?")) {
             const scrollPos = window.scrollY;
-            await fetch(API_BASE + `faq_blocks/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
-            await loadFAQ();
-            window.scrollTo(0, scrollPos);
+            const res = await fetch(API_BASE + `faq_blocks/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            if(res.ok) {
+                await loadFAQ();
+                window.scrollTo(0, scrollPos);
+            }
         }
     }
 
@@ -241,15 +335,22 @@
         if (file) fd.append('image', file); else if (urlValue) fd.append('image_url', urlValue);
         if(!fd.get('text') && !file && !urlValue) return alert("Пусто!");
 
-        const scrollPos = window.scrollY; // 👈 3. ФИКСИРУЕМ СКРОЛЛ ПЕРЕД СОХРАНЕНИЕМ
+        const scrollPos = window.scrollY;
 
-        const res = await fetch(API_BASE + 'faq_blocks/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+        const res = await fetch(API_BASE + 'faq_blocks/', {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin' // 👈 И ДОБАВЛЯЕМ ЕЁ СЮДА
+        });
+
         if(res.ok) {
             clearDropzone(topicId);
             document.getElementById(`text-input-${topicId}`).value = '';
-
             await loadFAQ();
-            window.scrollTo(0, scrollPos); // 👈 ВОЗВРАЩАЕМ СКРОЛЛ НА МЕСТО ПОСЛЕ ОБНОВЛЕНИЯ
+            window.scrollTo(0, scrollPos);
+        } else {
+            alert(`Ошибка сохранения. Статус: ${res.status}`);
         }
     }
 </script>
