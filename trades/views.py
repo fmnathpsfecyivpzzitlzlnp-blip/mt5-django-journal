@@ -1,6 +1,10 @@
+import os
+import urllib.request
 import re
+from urllib.parse import unquote
 
 import requests
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.shortcuts import render
@@ -12,6 +16,8 @@ from django.db.models import Sum, Q, Count
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from xhtml2pdf import pisa
+
 from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, FAQBlock, FAQTopic, UserQuizProgress, Question, \
     AnswerChoice, Quiz, DailyBacktest
 import csv
@@ -27,6 +33,15 @@ from .models import TradingRule
 from .serializers import TradingRuleSerializer
 from .models import DailyBacktest
 import json
+
+from django.http import HttpResponse
+from django.template.loader import get_template
+
+# Импорты для подмены шрифтов в ядре
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from xhtml2pdf.default import DEFAULT_FONT # 👈 Вот секретный ключ!
+
 
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
@@ -184,6 +199,61 @@ class TradeViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+
+    @action(detail=True, methods=['get'])
+    def export_pdf(self, request, pk=None):
+        import os
+        from urllib.parse import quote
+        from django.conf import settings
+        from django.http import HttpResponse
+        from django.template.loader import get_template
+        from xhtml2pdf import pisa
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        from xhtml2pdf.default import DEFAULT_FONT
+
+        trade = self.get_object()
+
+        # 👇 1. Подключаем идеальный шрифт для кириллицы (DejaVuSans)
+        font_path = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans.ttf')
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', font_path))
+            DEFAULT_FONT['sans-serif'] = 'DejaVu'
+            DEFAULT_FONT['helvetica'] = 'DejaVu'
+            DEFAULT_FONT['arial'] = 'DejaVu'
+        except Exception as e:
+            print(f"Ошибка загрузки шрифта: {e}")
+
+        context = {
+            'trade': trade,
+            'user': request.user,
+        }
+
+        response = HttpResponse(content_type='application/pdf')
+
+        # 👇 2. Формируем безопасную дату (заменяем : на - для Windows)
+        date_str = trade.time.strftime('%d.%m.%Y_%H-%M')
+
+        # 👇 3. Собираем красивое и безопасное имя файла
+        file_name = f"Тикет_{trade.ticket}_Дата_{date_str}.pdf"
+
+        # 👇 4. Отдаем браузеру в правильной кодировке (RFC 5987), чтобы русские буквы не сломались
+        response['Content-Disposition'] = f"attachment; filename*=utf-8''{quote(file_name)}"
+
+        template = get_template('trade_pdf_template.html')
+        html = template.render(context)
+
+        # 👇 5. Генерируем PDF (используем тот же link_callback, что и в FAQ)
+        pisa_status = pisa.CreatePDF(
+            html,
+            dest=response,
+            link_callback=link_callback,
+            encoding='utf-8'
+        )
+
+        if pisa_status.err:
+            return HttpResponse('Ошибка при создании PDF', status=500)
+        return response
 
     def get_queryset(self):
         qs = Trade.objects.filter(user=self.request.user).order_by('-time')
@@ -582,16 +652,93 @@ class TradingRuleViewSet(viewsets.ModelViewSet):
 def faq_view(request):
     return render(request, 'faq.html')
 
-# 👇 А это добавь в конец файла (API ViewSets):
+
+def link_callback(uri, rel):
+    """Теперь это ищет только картинки, шрифты мы сюда больше не пускаем"""
+    uri = unquote(uri)
+    if uri.startswith(settings.MEDIA_URL):
+        path = os.path.join(str(settings.MEDIA_ROOT), uri.replace(settings.MEDIA_URL, ""))
+        path = os.path.abspath(path)
+        if os.path.isfile(path):
+            return path
+    return uri
+
+def get_russian_font():
+    """Автоматически скачивает и регистрирует 100% рабочий шрифт DejaVu Sans"""
+    font_dir = os.path.join(settings.BASE_DIR, 'fonts')
+    os.makedirs(font_dir, exist_ok=True)
+    font_path = os.path.join(font_dir, 'DejaVuSans.ttf')
+
+    # Если шрифта еще нет - скачиваем его
+    if not os.path.exists(font_path):
+        print("Скачиваем идеальный шрифт DejaVu Sans...")
+        url = "https://github.com/prawnpdf/prawn/blob/master/data/fonts/DejaVuSans.ttf"
+        try:
+            urllib.request.urlretrieve(url, font_path)
+            print("Шрифт успешно скачан!")
+        except Exception as e:
+            print(f"Ошибка скачивания шрифта: {e}")
+
+    # Регистрируем шрифт в движке PDF
+    pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
+
+
 class FAQTopicViewSet(viewsets.ModelViewSet):
     serializer_class = FAQTopicSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    @action(detail=True, methods=['get'])
+    def export_pdf(self, request, pk=None):
+        topic = self.get_object()
+        blocks = topic.blocks.all()
+
+        # 👇 МАГИЯ: Жестко подменяем стандартные шрифты библиотеки на твой DejaVu 👇
+        # МАГИЯ: Жестко подменяем стандартные шрифты библиотеки на твой DejaVu
+        # 1. Задаем пути к файлам шрифтов (обычный и жирный)
+        font_path = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans.ttf')
+        font_path_bold = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans-Bold.ttf')  # 👈 ПУТЬ К ЖИРНОМУ
+
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', font_path))
+            # 3. Регистрируем жирный шрифт под именем 'DejaVu-Bold' 👈 ВОТ ОНО!
+            pdfmetrics.registerFont(TTFont('DejaVu-Bold', font_path_bold))
+
+            # Говорим xhtml2pdf использовать наш шрифт по умолчанию
+            DEFAULT_FONT['sans-serif'] = 'DejaVu'
+            DEFAULT_FONT['helvetica'] = 'DejaVu'
+            DEFAULT_FONT['arial'] = 'DejaVu'
+        except Exception as e:
+            print(f"Ошибка загрузки шрифта: {e}")
+
+        context = {
+            'topic': topic,
+            'blocks': blocks,
+            'user': request.user,
+        }
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="FAQ_{topic.id}.pdf"'
+
+        template = get_template('faq_pdf_template.html')
+        html = template.render(context)
+
+        pisa_status = pisa.CreatePDF(
+            html,
+            dest=response,
+            link_callback=link_callback,
+            encoding='utf-8'
+        )
+
+        if pisa_status.err:
+            return HttpResponse('Ошибка при создании PDF', status=500)
+        return response
+
     def get_queryset(self):
-        return FAQTopic.objects.filter(user=self.request.user).order_by('-created_at')
+        return FAQTopic.objects.filter(user=self.request.user).order_by('created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
 
 
 class FAQBlockViewSet(viewsets.ModelViewSet):

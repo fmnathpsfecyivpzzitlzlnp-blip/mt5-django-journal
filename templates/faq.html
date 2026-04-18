@@ -226,8 +226,14 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="text-end mt-3 border-top border-secondary pt-2">
-                                <button class="btn btn-sm btn-outline-danger py-0" onclick="deleteTopic(${t.id})">🗑️ Удалить всю тему</button>
+                            <div class="d-flex justify-content-between mt-3 border-top border-secondary pt-2">
+                                <a href="/api/faq_topics/${t.id}/export_pdf/" class="btn btn-sm btn-outline-info py-0">
+                                    📄 Экспорт в PDF
+                                </a>
+
+                                <button class="btn btn-sm btn-outline-danger py-0" onclick="deleteTopic(${t.id})">
+                                    🗑️ Удалить всю тему
+                                </button>
                             </div>
                         </div>
                     </div>

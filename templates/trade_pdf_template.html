@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page {
+            size: a4 portrait;
+            margin: 1.5cm;
+        }
+        body, p, div, th, td, h1, h2, h3, h4 {
+            font-family: sans-serif;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #0dcaf0;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .title {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #0dcaf0;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            font-size: 12pt;
+            color: #666;
+        }
+        .profit-win { color: #28a745; font-weight: bold; }
+        .profit-loss { color: #dc3545; font-weight: bold; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            font-size: 10pt;
+        }
+        th {
+            background-color: #f8f9fa;
+            width: 35%;
+            font-weight: bold;
+        }
+
+        .section-title {
+            font-size: 14pt;
+            color: #fff;
+            background-color: #0dcaf0;
+            padding: 5px 10px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-radius: 3px;
+        }
+        .block {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+        .img-container {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        img {
+            max-width: 100%;
+            border: 1px solid #ccc;
+        }
+        .comment-box {
+            background-color: #f1f3f5;
+            border-left: 4px solid #0dcaf0;
+            padding: 10px;
+            font-size: 10pt;
+            white-space: pre-wrap;
+        }
+        .mentor-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            font-size: 10pt;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 7px;
+            background: #ffc107;
+            color: #000;
+            font-size: 9pt;
+            font-weight: bold;
+            border-radius: 3px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="title">Отчет по сделке: {{ trade.symbol }} ({{ trade.type }})</div>
+        <div class="subtitle">Тикет: {{ trade.ticket }} | Дата: {{ trade.time|date:"d.m.Y H:i" }}</div>
+    </div>
+
+    <table>
+        <tr>
+            <th>Результат (PnL)</th>
+            <td class="{% if trade.profit > 0 %}profit-win{% elif trade.profit < 0 %}profit-loss{% endif %}">
+                ${{ trade.profit }}
+            </td>
+        </tr>
+        <tr>
+            <th>Сетап / Стратегия</th>
+            <td>{{ trade.strategy_name|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th>Логика входа</th>
+            <td>{{ trade.entry_logic|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th>Тенденция (Тренд)</th>
+            <td>{{ trade.market_trend|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th>Психология / Эмоции</th>
+            <td>{{ trade.psychology|default:"-" }}</td>
+        </tr>
+        <tr>
+            <th>Оценка сетапа</th>
+            <td>{{ trade.setup_grade|default:"-" }}</td>
+        </tr>
+    </table>
+
+    {% if trade.comment %}
+    <div class="block">
+        <strong>Комментарий к сделке:</strong>
+        <div class="comment-box">{{ trade.comment|linebreaksbr }}</div>
+    </div>
+    {% endif %}
+
+    {% if trade.analysis_screens.all %}
+    <div class="section-title">Аналитика (До входа / В процессе)</div>
+        {% for screen in trade.analysis_screens.all %}
+        <div class="block">
+            <strong>Таймфрейм: {{ screen.timeframe }}</strong>
+            <div class="img-container">
+                <img src="{{ screen.image.url }}">
+            </div>
+            {% if screen.description %}
+            <div class="comment-box">{{ screen.description|linebreaksbr }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if trade.mentor_reviews.all %}
+    <div class="section-title" style="background-color: #ffc107; color: #000;">Разбор сделки (Работа над ошибками)</div>
+        {% for review in trade.mentor_reviews.all %}
+        <div class="block">
+            <div class="badge">{{ review.error_type }}</div>
+            {% if review.image %}
+            <div class="img-container">
+                <img src="{{ review.image.url }}">
+            </div>
+            {% endif %}
+            {% if review.mentor_comment %}
+            <div class="mentor-box"><strong>Вердикт:</strong><br>{{ review.mentor_comment|linebreaksbr }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div style="text-align: center; margin-top: 40px; font-size: 8pt; color: #888;">
+        Сгенерировано в Trading Journal PRO для {{ user.username }}
+    </div>
+
+</body>
+</html>

@@ -525,6 +525,11 @@ https://www.tradingview.com/x/oukD8T9m/
             if (t.entry_logic === 'Чужая сделка' && isReviewed) {
                 copyBtn = `<button class="btn btn-sm btn-outline-warning" onclick="copyTrade(${t.id})" title="Копировать разбор">📋 Копия</button>`;
             }
+            // 👇 НОВАЯ ЛОГИКА ДЛЯ КНОПКИ PDF В ТАБЛИЦЕ 👇
+            let pdfBtn = '';
+            if ((t.mentor_reviews && t.mentor_reviews.length > 0) || (t.analysis_screens && t.analysis_screens.length > 0)) {
+                pdfBtn = `<a href="/api/trades/${t.id}/export_pdf/" target="_blank" class="btn btn-sm btn-outline-light" title="Скачать PDF отчет">📄 PDF</a>`;
+            }
 
             html += `<tr style="${rowOpacity}">
                 <td class="ps-3"><input type="checkbox" class="form-check-input bg-dark border-secondary trade-cb" value="${t.id}"></td>
@@ -537,6 +542,7 @@ https://www.tradingview.com/x/oukD8T9m/
                 <td>
                     <div class="d-flex gap-1">
                         ${screenBtn}
+                        ${pdfBtn}
                         ${copyBtn}
                         <button class="btn btn-sm btn-primary" onclick="openReviewModal(${t.id})" title="Открыть Разбор">🔬 РАЗБОР</button>
                         <button onclick="deleteTrade(${t.id}, '${t.ticket}')" class="btn btn-sm btn-outline-danger" title="Удалить">🗑️</button>
@@ -564,6 +570,7 @@ https://www.tradingview.com/x/oukD8T9m/
                     <h5 class="text-info m-0">📋 Контекст</h5>
 
                     <div class="d-flex align-items-center gap-2">
+                        <a href="/api/trades/${t.id}/export_pdf/" target="_blank" class="btn btn-sm btn-outline-light fw-bold">📄 PDF отчет</a>
                         <label class="text-secondary small fw-bold m-0">PnL ($):</label>
                         <input type="number" step="0.01" id="modal-trade-profit" class="form-control form-control-sm bg-black ${t.profit > 0 ? 'text-success' : 'text-danger'} border-secondary text-center fw-bold" value="${t.profit}" style="width: 100px;">
                         <button class="btn btn-sm btn-info fw-bold text-dark" onclick="updateTradeMeta(event, ${t.id})">💾 Сохранить</button>
