@@ -25,6 +25,7 @@ urlpatterns = [
     # 👇 ВСТАВЬ ЭТИ ДВЕ СТРОКИ СЮДА 👇
     path('backtest/', views.backtest_page, name='backtest'),
     path('backtest_api/', views.backtest_grid_api),
+    path('guide/', views.guide_page, name='guide'),
 ]
 
 # Раздача картинок для разработчика

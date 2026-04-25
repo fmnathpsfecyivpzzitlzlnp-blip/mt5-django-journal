@@ -41,7 +41,7 @@ from django.template.loader import get_template
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from xhtml2pdf.default import DEFAULT_FONT # 👈 Вот секретный ключ!
-
+from rest_framework import filters
 
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
@@ -257,14 +257,27 @@ class TradeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Trade.objects.filter(user=self.request.user).order_by('-time')
+
         is_processed = self.request.query_params.get('is_processed')
-        if is_processed is not None: qs = qs.filter(is_processed=(is_processed.lower() == 'true'))
+        if is_processed is not None:
+            qs = qs.filter(is_processed=(is_processed.lower() == 'true'))
+
+        # 👇 ВОТ НАШ КВАНТОВЫЙ ПОИСК (ПО ЧАСТИ СЛОВА) 👇
+        search_query = self.request.query_params.get('search')
+        if search_query:
+            qs = qs.filter(
+                Q(ticket__icontains=search_query) |
+                Q(symbol__icontains=search_query) |
+                Q(comment__icontains=search_query) |
+                Q(mt5_comment__icontains=search_query) |
+                Q(analysis_screens__description__icontains=search_query) |
+                Q(mentor_reviews__mentor_comment__icontains=search_query)
+            ).distinct()  # 👈 Важно: distinct() гарантирует, что сделка не задвоится!
+
         return qs
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-
 
     @action(detail=False, methods=['post'])
     def upload_history(self, request):
@@ -273,24 +286,61 @@ class TradeViewSet(viewsets.ModelViewSet):
             broker_offset_hours = int(request.POST.get('broker_offset', 3))
         except ValueError:
             broker_offset_hours = 3
+
         try:
+            # Учитываем, что разделитель может быть точкой с запятой (как в твоем примере)
             decoded_file = request.FILES['file'].read().decode('utf-8').splitlines()
-            reader = csv.DictReader(decoded_file)
+            # Пробуем определить разделитель (запятая или точка с запятой)
+            dialect = csv.Sniffer().sniff(decoded_file[0]) if decoded_file else csv.excel
+            reader = csv.DictReader(decoded_file, dialect=dialect)
+
             count = 0
             for row in reader:
-                if not Trade.objects.filter(ticket=row.get('Ticket'), user=request.user).exists():
-                    naive_time = datetime.strptime(row.get('Time'), "%Y-%m-%d %H:%M:%S")
+                # В CSV из тестера названия колонок могут отличаться. Ищем варианты.
+                ticket = row.get('Ticket') or row.get('Ticket ') or row.get('\ufeffTicket')  # \ufeff - это BOM маркер
+
+                # Если тикета нет, пропускаем строку
+                if not ticket: continue
+
+                if not Trade.objects.filter(ticket=ticket, user=request.user).exists():
+
+                    time_str = row.get('OpenTime') or row.get('Time')
+                    try:
+                        # В твоем примере формат "2026.04.01 01:08"
+                        time_str = time_str.replace('.', '-')
+                        naive_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+                    except ValueError:
+                        # Фолбэк на старый формат, если он с секундами
+                        naive_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+
                     utc_time = (naive_time - timedelta(hours=broker_offset_hours)).replace(tzinfo=pytz.UTC)
+
+                    profit_str = row.get('Profit_USD') or row.get('Profit') or "0"
+
                     Trade.objects.create(
-                        user=request.user, ticket=row.get('Ticket'), symbol=row.get('Symbol', 'UNKNOWN'),
-                        type=row.get('Type', 'BUY'), volume=float(row.get('Volume', 0)),
-                        entry_price=float(row.get('Price', 0)), profit=float(row.get('Profit', 0)),
-                        time=utc_time, strategy_name="Импорт", is_processed=True
+                        user=request.user,
+                        ticket=ticket,
+                        symbol=row.get('Symbol', 'UNKNOWN'),
+                        type=row.get('Type', 'BUY'),
+                        volume=float(row.get('Volume', 0)),
+                        entry_price=float(row.get('OpenPrice') or row.get('Price', 0)),
+                        profit=float(profit_str),
+                        time=utc_time,
+
+                        # 👇 ВОТ ГЛАВНАЯ МАГИЯ 👇
+                        strategy_name="Прогон из тестера",
+                        entry_logic="Сделка от робота",  # 👈 Теперь Аналитика их точно увидит!
+
+                        magic_number=row.get('Magic', ''),
+                        # 👈 Приклеиваем огромный ярлык [ТЕСТЕР] к комментарию, чтобы легко удалить
+                        mt5_comment="[ТЕСТЕР] " + str(row.get('Comment', '')),
+
+                        is_processed=True
                     )
                     count += 1
-            return Response({"message": f"Успешно импортировано {count} новых сделок!"})
+            return Response({"message": f"Успешно импортировано {count} тестовых сделок!"})
         except Exception as e:
-            return Response({"error": f"Ошибка обработки файла"}, status=400)
+            return Response({"error": f"Ошибка обработки файла: {str(e)}"}, status=400)
 
     @action(detail=False, methods=['post'])
     def bulk_process(self, request):
@@ -322,7 +372,6 @@ class TradeViewSet(viewsets.ModelViewSet):
             trade.save()
         return Response({"message": f"Успешно обработано {trades.count()} сделок!"})
 
-    @action(detail=False, methods=['get'])
     @action(detail=False, methods=['get'])
     def stats(self, request):
         try:
@@ -562,6 +611,15 @@ class TradeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=400)
 
+    @action(detail=False, methods=['post'])
+    def bulk_delete(self, request):
+        trade_ids = request.data.get('trade_ids', [])
+        if not trade_ids:
+            return Response({"error": "Сделки не выбраны"}, status=400)
+
+        deleted_count, _ = Trade.objects.filter(id__in=trade_ids, user=request.user).delete()
+        return Response({"message": f"Успешно удалено {deleted_count} сделок."})
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -642,6 +700,10 @@ def mt5_webhook(request):
 class TradingRuleViewSet(viewsets.ModelViewSet):
     serializer_class = TradingRuleSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    # 👇 ВОТ ЭТИ ДВЕ СТРОЧКИ ДЕЛАЮТ МАГИЮ ПОИСКА 👇
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['ticket', 'symbol', 'comment', 'analysis_screens__description', 'mentor_reviews__mentor_comment']
 
     def get_queryset(self):
         return TradingRule.objects.filter(user=self.request.user).order_by('created_at')
@@ -907,3 +969,6 @@ def download_tv_image(url):
         return ContentFile(resp.content, name=file_name), None
     except Exception as e:
         return None, str(e)
+
+def guide_page(request):
+    return render(request, 'guide.html')

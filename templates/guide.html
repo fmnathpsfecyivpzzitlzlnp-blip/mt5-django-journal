@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <h3 class="text-light mb-4 border-bottom border-secondary pb-3">🗺️ Руководство: Как работать с экосистемой</h3>
+        
+        <p class="text-secondary fs-5 mb-5">
+            Этот дневник — не просто таблица для записи PnL. Это конвейер по превращению тебя в системного трейдера. 
+            Здесь важен порядок действий и строгое разделение правил.
+        </p>
+
+        <h4 class="text-info mb-3">🗂️ Где и какие правила хранить?</h4>
+        <div class="row g-4 mb-5">
+            <div class="col-md-6">
+                <div class="card bg-dark border-info h-100 shadow">
+                    <div class="card-body">
+                        <h5 class="text-info"><i class="fs-4">🧠</i> Торговая Конституция</h5>
+                        <p class="text-muted small mb-2">Находится в разделе <b>"Дневник"</b></p>
+                        <hr class="border-secondary">
+                        <p class="text-light small">
+                            <b>Что писать:</b> ЖЕСТКИЕ ТЕХНИЧЕСКИЕ ПРАВИЛА. Как выглядит свеча, где ставить стоп, что такое девиация (а не свип), где находится FVG.
+                        </p>
+                        <p class="text-light small mb-0">
+                            <b>Когда читать:</b> <span class="text-warning">В ПРОЦЕССЕ АНАЛИЗА ГРАФИКА.</span> Это твоя шпаргалка. Если сомневаешься, есть ли тут точка входа — открываешь Конституцию и сверяешь график с текстом.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card bg-dark border-warning h-100 shadow">
+                    <div class="card-body">
+                        <h5 class="text-warning"><i class="fs-4">🧘‍♂️</i> Дзен Трейдера</h5>
+                        <p class="text-muted small mb-2">Находится в разделе <b>"Playbook"</b></p>
+                        <hr class="border-secondary">
+                        <p class="text-light small">
+                            <b>Что писать:</b> ПРАВИЛА ДЕНЕГ И ЭМОЦИЙ. Лимиты потерь (Например: 2 стопа = конец), правила фиксации (1 тейк = конец), запрет на отыгрыш.
+                        </p>
+                        <p class="text-light small mb-0">
+                            <b>Когда читать:</b> <span class="text-warning">ДО ОТКРЫТИЯ ТЕРМИНАЛА И ПОСЛЕ СДЕЛКИ.</span> Это твои тормоза. Прочитал мантру утром -> поторговал -> закрыл сделку -> снова прочитал Дзен, чтобы не влететь в тильт.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h4 class="text-success mb-3">⚙️ Идеальный рабочий процесс (Шаг за шагом)</h4>
+        
+        <div class="card bg-black border-secondary mb-3">
+            <div class="card-body">
+                <h6 class="text-light"><span class="badge bg-secondary me-2">Шаг 1</span> Подготовка (Playbook -> Дзен)</h6>
+                <p class="text-muted small mb-0">Перед началом торгов открываешь Playbook. Освежаешь в памяти картинки идеальных A+ сетапов. Открываешь панель "Дзен Трейдера", читаешь правила риск-менеджмента на день.</p>
+            </div>
+        </div>
+
+        <div class="card bg-black border-secondary mb-3">
+            <div class="card-body">
+                <h6 class="text-light"><span class="badge bg-secondary me-2">Шаг 2</span> Работа с графиком (Дневник -> Конституция)</h6>
+                <p class="text-muted small mb-0">Открываешь терминал. Если сомневаешься в контексте, заглядываешь в "Торговую Конституцию" в Дневнике, чтобы отфильтровать галлюцинации от реального сетапа.</p>
+            </div>
+        </div>
+
+        <div class="card bg-black border-secondary mb-3">
+            <div class="card-body">
+                <h6 class="text-light"><span class="badge bg-secondary me-2">Шаг 3</span> Фиксация результата (Входящие / Inbox)</h6>
+                <p class="text-muted small mb-0">Сделка закрылась (тейк или стоп). Она автоматически падает во Входящие (если настроен советник MT5), либо ты создаешь её через кнопку "Чужая сделка". Здесь ты задаешь ей начальные теги: Тренд, Психологию, Оценку и отправляешь в Дневник.</p>
+            </div>
+        </div>
+
+        <div class="card bg-black border-secondary mb-3">
+            <div class="card-body">
+                <h6 class="text-light"><span class="badge bg-secondary me-2">Шаг 4</span> Квантовый разбор (Дневник)</h6>
+                <p class="text-muted small mb-0">Переходишь в Дневник. Открываешь сделку кнопкой "РАЗБОР". Прикрепляешь скриншоты со своей логикой. Если это чужая сделка (разнос) — добавляешь скриншоты ментора, фиксируешь его цитату и тип ошибки.</p>
+            </div>
+        </div>
+
+        <div class="card bg-black border-secondary mb-5">
+            <div class="card-body">
+                <h6 class="text-light"><span class="badge bg-secondary me-2">Шаг 5</span> Аудит и Аналитика</h6>
+                <p class="text-muted small mb-0">В конце недели заходишь в "Квантовый Аудит" и "Аналитику". Смотришь винрейт, ищешь свои слабые часы или сетапы, которые тянут депозит вниз. Фильтруешь отдельно свои сделки и роботов.</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

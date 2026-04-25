@@ -472,8 +472,17 @@
     function clearSmartInput(prefix, event) { if(event) event.stopPropagation(); fileState[prefix] = null; document.getElementById(`${prefix}-file-input`).value = ''; document.getElementById(`${prefix}-url-input`).value = ''; document.getElementById(`${prefix}-preview-container`).classList.add('d-none'); document.getElementById(`${prefix}-drop-text`).classList.remove('d-none'); document.getElementById(`${prefix}-preview-img`).src = ''; }
 
     async function submitAnalysis(type) {
-        const fd = new FormData(); const urlValue = document.getElementById(`my-url-input`).value;
-        if (fileState[type]) { fd.append('image', fileState[type]); } else if (urlValue) { fd.append('image_url', urlValue); }
+        // type здесь всегда 'my', потому что во Входящих мы грузим только свои скрины
+        const fd = new FormData();
+        const urlValue = document.getElementById(`my-url-input`).value;
+
+        if (fileState[type]) {
+            fd.append('image', fileState[type]);
+        } else if (urlValue) {
+            fd.append('image_url', urlValue);
+        } else {
+            return alert("Вставь картинку или ссылку!");
+        }
 
         fd.append('timeframe', document.getElementById('my-tf').value);
         fd.append('description', document.getElementById('my-desc').value);
@@ -482,17 +491,54 @@
         fd.append('entry_logic', document.getElementById('modal-logic').value);
         fd.append('psychology', document.getElementById('modal-psy').value);
         fd.append('setup_grade', document.getElementById('modal-grade').value);
+
+        // Отмечаем, что сделка обработана и должна улететь в Дневник
         fd.append('is_processed', 'true');
 
-        const btn = event.target; btn.disabled = true; btn.innerText = "Загрузка...";
-        try {
-            await fetch(`${API_BASE}trades/${currentReviewTradeId}/add_analysis_screen/`, { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }});
-            await fetch(`${API_BASE}trades/${currentReviewTradeId}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }});
+        const btn = event.target;
+        const origText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Загрузка...";
 
-            btn.disabled = false; btn.innerText = "Успешно!";
-            reviewModal.hide();
+        try {
+            // 1. Отправляем картинку
+            await fetch(`${API_BASE}trades/${currentReviewTradeId}/add_analysis_screen/`, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                credentials: 'same-origin' // 👈 Защита от 403
+            });
+
+            // 2. Сохраняем логику и тренд
+            await fetch(`${API_BASE}trades/${currentReviewTradeId}/`, {
+                method: 'PATCH',
+                body: fd,
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                credentials: 'same-origin' // 👈 Защита от 403
+            });
+
+            // 3. Зеленая кнопка успеха
+            btn.disabled = false;
+            btn.classList.replace('btn-warning', 'btn-success');
+            btn.innerText = "✅ Успешно! Можно добавлять следующий скрин";
+
+            setTimeout(() => {
+                btn.classList.replace('btn-success', 'btn-warning');
+                btn.innerText = origText;
+            }, 3000);
+
+            // 4. Очищаем форму для нового скрина
+            clearSmartInput('my');
+            document.getElementById('my-desc').value = '';
+
+            // 5. Рисуем картинку в ленте и обновляем таблицу
+            await loadReviewFeeds();
             initPage();
-        } catch(e) { btn.disabled = false; btn.innerText = "Ошибка"; }
+
+        } catch(e) {
+            btn.disabled = false;
+            btn.innerText = "Ошибка сохранения";
+        }
     }
 
     async function submitManualTrade() {

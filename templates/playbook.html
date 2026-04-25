@@ -330,7 +330,8 @@
         const res = await fetch(API_BASE + 'playbook/', {
             method: 'POST',
             body: fd,
-            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin' // 👈 ДОБАВИТЬ ЭТУ СТРОКУ (защита от 403)
         });
 
         btn.disabled = false;

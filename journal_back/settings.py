@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-2@x#t4x&2b^s80eqh^#-gz^14k@z&k2!)&n$2o)20-tmlzs1*m
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['diary.local', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -137,3 +137,6 @@ LOGIN_URL = '/api-auth/login/'
 # Удерживаем сессию 30 дней
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_AGE = 2592000
+
+SESSION_COOKIE_NAME = 'diary_sessionid'
+CSRF_COOKIE_NAME = 'diary_csrftoken'

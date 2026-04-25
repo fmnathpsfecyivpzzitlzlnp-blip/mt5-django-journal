@@ -20,6 +20,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📖 Мой Дневник</h4>
     <div>
+        <button class="btn btn-warning fw-bold text-dark me-2" data-bs-toggle="modal" data-bs-target="#addManualTradeModal">➕ Чужая сделка</button>
         <button class="btn btn-outline-info fw-bold me-2" data-bs-toggle="offcanvas" data-bs-target="#rulesOffcanvas">🧠 Моя База (Правила)</button>
         <input type="file" id="csv-upload" accept=".csv" style="display: none;" onchange="uploadCSV()">
         <button class="btn btn-success" onclick="document.getElementById('csv-upload').click()">📥 Импорт (CSV)</button>
@@ -54,7 +55,7 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск: тикет, актив..." oninput="applyFilters()">
+                <input type="text" id="filter-search" class="form-control bg-dark text-light border-secondary" placeholder="Поиск (включая разборы)..." oninput="handleSearchInput()">
             </div>
         </div>
 
@@ -82,7 +83,8 @@
                     <option value="От нижней границы">📈 От нижней границы</option>
                     <option value="От верхней границы">📉 От верхней границы</option>
                     <option value="Сделка от робота">🤖 Сделка от робота</option>
-                    <option value="Тест/Ошибка">🔧 Техническая (Тест/Сбой)</option>
+                    <option value="Тестер стратегий">🧪 Тестер стратегий</option>
+                    <option value="Тест/Ошибка">🔧 Техническая (Сбой)</option>
                     <option value="Чужая сделка">👽 Чужая сделка</option>
                 </select>
             </div>
@@ -96,6 +98,7 @@
 
         <div class="row g-2">
             <div class="col-12 text-end">
+                <button class="btn btn-sm btn-danger fw-bold me-2" onclick="deleteSelectedTrades()">🔥 Удалить выбранные</button>
                 <button class="btn btn-sm btn-success fw-bold" onclick="exportToExcel()">📊 Экспорт в Excel (CSV)</button>
             </div>
         </div>
@@ -119,6 +122,49 @@
         <tbody id="trades-table-body"></tbody>
     </table>
 </div></div></div>
+
+<div class="modal fade" id="addManualTradeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-warning">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-warning">➕ Добавить чужую сделку</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="small text-secondary mb-1">Автор сделки (Например: RS, Регина)</label>
+                    <input type="text" id="manual-author" class="form-control bg-dark text-light border-secondary" placeholder="RS">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="small text-secondary mb-1">Актив</label>
+                        <input type="text" id="manual-symbol" class="form-control bg-dark text-light border-secondary" placeholder="XAUUSD" value="XAUUSD">
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-secondary mb-1">Направление</label>
+                        <select id="manual-type" class="form-select bg-dark text-light border-secondary">
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="small text-secondary mb-1">PnL ($)</label>
+                        <input type="number" id="manual-profit" step="0.01" class="form-control bg-dark text-light border-secondary" placeholder="-1 или 5">
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-secondary mb-1">Дата</label>
+                        <input type="date" id="manual-date" class="form-control bg-dark text-light border-secondary">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button class="btn btn-warning w-100 fw-bold text-dark" onclick="createManualTrade()">Создать карточку сделки</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="reviewModal" tabindex="-1">
     <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
@@ -287,7 +333,7 @@ https://www.tradingview.com/x/oukD8T9m/
     let currentReviewTradeId = null;
     let fileState = { 'my': null, 'rs': null };
     let currentSort = { column: 'time', asc: false };
-    let customTiltQuotes = []; // Твои цитаты из БД
+    let customTiltQuotes = [];
 
     document.addEventListener("DOMContentLoaded", () => {
         reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
@@ -296,8 +342,6 @@ https://www.tradingview.com/x/oukD8T9m/
         initPage();
     });
 
-    // --- ЛОГИКА ТОРГОВОЙ КОНСТИТУЦИИ ---
-    // --- ЛОГИКА ТОРГОВОЙ КОНСТИТУЦИИ ---
     async function loadConstitution() {
         try {
             const res = await fetch(API_BASE + 'rules/');
@@ -310,7 +354,6 @@ https://www.tradingview.com/x/oukD8T9m/
             let psy = rules.filter(r => r.category === 'psy_base');
 
             let html = '';
-            // 👇 Добавлено style="white-space: pre-wrap;" в теги <li> 👇
             if (revs.length > 0) {
                 html += `<h6 class="text-warning fw-bold border-bottom border-warning pb-1">🔄 Вход: РАЗВОРОТ</h6><ul class="text-muted ps-3 mb-4">`;
                 revs.forEach(r => html += `<li class="mb-2" style="white-space: pre-wrap;">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteConstRule(${r.id})" title="Удалить">✖</span></li>`);
@@ -360,7 +403,16 @@ https://www.tradingview.com/x/oukD8T9m/
         const statsData = await statsRes.json();
         if (statsData.overview) renderStats(statsData);
 
-        const tradesRes = await fetch(API_BASE + 'trades/?is_processed=true');
+        const savedSearch = localStorage.getItem('shared_sym') || '';
+        if (savedSearch) document.getElementById('filter-search').value = savedSearch;
+
+        // Добавляем параметр search для глубокого поиска на бэкенде
+        let url = API_BASE + 'trades/?is_processed=true';
+        if (savedSearch) {
+            url += `&search=${encodeURIComponent(savedSearch)}`;
+        }
+
+        const tradesRes = await fetch(url);
         allTradesData = await tradesRes.json();
 
         try {
@@ -373,7 +425,6 @@ https://www.tradingview.com/x/oukD8T9m/
 
         if(localStorage.getItem('j_type')) document.getElementById('filter-type').value = localStorage.getItem('j_type');
         if(localStorage.getItem('j_pnl')) document.getElementById('filter-pnl').value = localStorage.getItem('j_pnl');
-        if(localStorage.getItem('shared_sym')) document.getElementById('filter-search').value = localStorage.getItem('shared_sym');
         if(localStorage.getItem('j_trend')) document.getElementById('filter-trend').value = localStorage.getItem('j_trend');
         if(localStorage.getItem('j_logic')) document.getElementById('filter-logic').value = localStorage.getItem('j_logic');
         if(localStorage.getItem('j_date')) document.getElementById('filter-date').value = localStorage.getItem('j_date');
@@ -405,7 +456,6 @@ https://www.tradingview.com/x/oukD8T9m/
     function applyFilters() {
         localStorage.setItem('j_type', document.getElementById('filter-type').value);
         localStorage.setItem('j_pnl', document.getElementById('filter-pnl').value);
-        localStorage.setItem('shared_sym', document.getElementById('filter-search').value);
         localStorage.setItem('j_trend', document.getElementById('filter-trend').value);
         localStorage.setItem('j_logic', document.getElementById('filter-logic').value);
         localStorage.setItem('j_date', document.getElementById('filter-date').value);
@@ -416,7 +466,6 @@ https://www.tradingview.com/x/oukD8T9m/
 
         const typeVal = document.getElementById('filter-type').value;
         const pnlVal = document.getElementById('filter-pnl').value;
-        const searchVal = document.getElementById('filter-search').value.toLowerCase();
         const trendVal = document.getElementById('filter-trend').value;
         const logicVal = document.getElementById('filter-logic').value;
         const dateVal = document.getElementById('filter-date').value;
@@ -435,7 +484,8 @@ https://www.tradingview.com/x/oukD8T9m/
             if (pnlVal === 'win' && t.profit <= 0) matchPnl = false;
             if (pnlVal === 'loss' && t.profit >= 0) matchPnl = false;
 
-            const matchSearch = ((t.ticket||'') + ' ' + (t.symbol||'')).toLowerCase().includes(searchVal);
+            const matchSearch = true;
+
             const matchMagic = (t.magic_number || '').toString().toLowerCase().includes(magicVal);
             const matchComment = (t.mt5_comment || '').toLowerCase().includes(commentVal);
 
@@ -495,7 +545,7 @@ https://www.tradingview.com/x/oukD8T9m/
             const d = new Date(t.time);
             const dateStr = d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit', year: 'numeric'});
             const timeStr = d.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
-            const finalDate = `${dateStr}<br><span class="text-muted">${timeStr}</span>`;
+            const finalDate = `<span style="cursor:pointer; border-bottom: 1px dashed #6c757d;" title="Изменить дату" onclick="changeTradeDate(${t.id}, '${t.time}')">${dateStr}</span><br><span class="text-muted">${timeStr}</span>`;
 
             let pClass = t.profit > 0 ? 'profit-positive' : 'profit-negative';
             let rowOpacity = "";
@@ -525,7 +575,6 @@ https://www.tradingview.com/x/oukD8T9m/
             if (t.entry_logic === 'Чужая сделка' && isReviewed) {
                 copyBtn = `<button class="btn btn-sm btn-outline-warning" onclick="copyTrade(${t.id})" title="Копировать разбор">📋 Копия</button>`;
             }
-            // 👇 НОВАЯ ЛОГИКА ДЛЯ КНОПКИ PDF В ТАБЛИЦЕ 👇
             let pdfBtn = '';
             if ((t.mentor_reviews && t.mentor_reviews.length > 0) || (t.analysis_screens && t.analysis_screens.length > 0)) {
                 pdfBtn = `<a href="/api/trades/${t.id}/export_pdf/" target="_blank" class="btn btn-sm btn-outline-light" title="Скачать PDF отчет">📄 PDF</a>`;
@@ -589,7 +638,6 @@ https://www.tradingview.com/x/oukD8T9m/
 
         document.getElementById('trade-context-header').innerHTML = topContext;
 
-        // 👇 Слушатель изменения профита для умной перекраски и триггера цитат
         const pnlInput = document.getElementById('modal-trade-profit');
         pnlInput.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value) || 0;
@@ -633,16 +681,20 @@ https://www.tradingview.com/x/oukD8T9m/
         fd.append('psychology', document.getElementById('modal-psy').value);
         fd.append('setup_grade', document.getElementById('modal-grade').value);
         fd.append('strategy_name', '');
-
-        // 👇 ДОБАВЛЯЕМ PNL В ОТПРАВКУ НА СЕРВЕР 👇
         fd.append('profit', document.getElementById('modal-trade-profit').value);
 
-        const res = await fetch(`${API_BASE}trades/${id}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+        const res = await fetch(`${API_BASE}trades/${id}/`, {
+            method: 'PATCH',
+            body: fd,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin'
+        });
+
         if(res.ok) {
             const btn = event.target;
             btn.innerText = '✅';
             setTimeout(() => btn.innerText = '💾 Сохранить', 2000);
-            initPage(); // Перезагружаем таблицу, чтобы обновить цифры
+            initPage();
         } else {
             alert("Ошибка сохранения");
         }
@@ -679,7 +731,6 @@ https://www.tradingview.com/x/oukD8T9m/
     function setPreview(fileOrUrl, prefix) { const previewContainer = document.getElementById(`${prefix}-preview-container`); const previewImg = document.getElementById(`${prefix}-preview-img`); const dropText = document.getElementById(`${prefix}-drop-text`); if (typeof fileOrUrl === 'string') { previewImg.src = fileOrUrl; fileState[prefix] = null; } else { previewImg.src = URL.createObjectURL(fileOrUrl); fileState[prefix] = fileOrUrl; document.getElementById(`${prefix}-url-input`).value = ''; } previewContainer.classList.remove('d-none'); dropText.classList.add('d-none'); }
     function clearSmartInput(prefix, event) { if(event) event.stopPropagation(); fileState[prefix] = null; document.getElementById(`${prefix}-file-input`).value = ''; document.getElementById(`${prefix}-url-input`).value = ''; document.getElementById(`${prefix}-preview-container`).classList.add('d-none'); document.getElementById(`${prefix}-drop-text`).classList.remove('d-none'); document.getElementById(`${prefix}-preview-img`).src = ''; }
 
-    // 👇 ФУНКЦИЯ ДЛЯ УМНОГО ПАРСЕРА БЛОКНОТА 👇
     function detectTimeframe(line) {
         const lower = line.trim().toLowerCase();
         const clean = lower.replace(/:/g, '').trim();
@@ -767,14 +818,95 @@ https://www.tradingview.com/x/oukD8T9m/
         loadReviewFeeds();
         initPage();
     }
-    // 👆 КОНЕЦ ЛОГИКИ ПАРСЕРА 👆
 
     async function submitAnalysis(type) {
-        const fd = new FormData(); const urlValue = document.getElementById(`${type}-url-input`).value;
-        if (fileState[type]) { fd.append('image', fileState[type]); } else if (urlValue) { fd.append('image_url', urlValue); } else { if(type === 'my') return alert("Вставь картинку!"); }
-        let endpoint = ''; if (type === 'my') { fd.append('timeframe', document.getElementById('my-tf').value); fd.append('description', document.getElementById('my-desc').value); endpoint = 'add_analysis_screen'; } else { fd.append('timeframe', document.getElementById('rs-tf').value); fd.append('error_type', document.getElementById('rs-error').value); fd.append('mentor_comment', document.getElementById('rs-comment').value); if(!document.getElementById('rs-comment').value && !fileState['rs'] && !urlValue) return alert("Добавь текст или скрин!"); endpoint = 'add_mentor_review'; }
-        const btn = event.target; btn.disabled = true; btn.innerText = "...";
-        try { const res = await fetch(`${API_BASE}trades/${currentReviewTradeId}/${endpoint}/`, { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') }}); btn.disabled = false; btn.innerText = "ОК"; if(res.ok) { clearSmartInput(type); if(type === 'my') document.getElementById('my-desc').value = ''; else document.getElementById('rs-comment').value = ''; loadReviewFeeds(); initPage(); } } catch(e) { btn.disabled = false; btn.innerText = "Ошибка"; }
+        const fd = new FormData();
+        const urlValue = document.getElementById(`${type}-url-input`).value;
+
+        if (fileState[type]) {
+            fd.append('image', fileState[type]);
+        } else if (urlValue) {
+            fd.append('image_url', urlValue);
+        } else {
+            if (type === 'my') {
+                return alert("Вставь картинку или ссылку!");
+            } else if (type === 'rs') {
+                const text = document.getElementById('rs-comment').value.trim();
+                const error = document.getElementById('rs-error').value;
+                if (!text && !error) {
+                    return alert("Добавь текст, выбери ошибку или прикрепи скриншот!");
+                }
+            }
+        }
+
+        let endpoint = '';
+        if (type === 'my') {
+            fd.append('timeframe', document.getElementById('my-tf').value);
+            fd.append('description', document.getElementById('my-desc').value);
+            endpoint = 'add_analysis_screen';
+        } else {
+            fd.append('timeframe', document.getElementById('rs-tf').value);
+            fd.append('error_type', document.getElementById('rs-error').value);
+            fd.append('mentor_comment', document.getElementById('rs-comment').value);
+            endpoint = 'add_mentor_review';
+        }
+
+        fd.append('market_trend', document.getElementById('modal-trend').value);
+        fd.append('entry_logic', document.getElementById('modal-logic').value);
+        fd.append('psychology', document.getElementById('modal-psy').value);
+        fd.append('setup_grade', document.getElementById('modal-grade').value);
+        fd.append('is_processed', 'true');
+
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Загрузка...";
+
+        try {
+            const res1 = await fetch(`${API_BASE}trades/${currentReviewTradeId}/${endpoint}/`, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                credentials: 'same-origin'
+            });
+
+            const res2 = await fetch(`${API_BASE}trades/${currentReviewTradeId}/`, {
+                method: 'PATCH',
+                body: fd,
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                credentials: 'same-origin'
+            });
+
+            if (res1.ok) {
+                btn.disabled = false;
+                btn.classList.replace('btn-warning', 'btn-success');
+                btn.classList.replace('btn-danger', 'btn-success');
+                btn.innerText = "✅ Успешно!";
+
+                setTimeout(() => {
+                    btn.classList.replace('btn-success', type === 'my' ? 'btn-warning' : 'btn-danger');
+                    btn.innerText = originalText;
+                }, 2500);
+
+                clearSmartInput(type);
+                if (type === 'my') {
+                    document.getElementById('my-desc').value = '';
+                } else {
+                    document.getElementById('rs-comment').value = '';
+                }
+
+                await loadReviewFeeds();
+                initPage();
+            } else {
+                alert("Ошибка сохранения на сервере!");
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+
+        } catch(e) {
+            btn.disabled = false;
+            btn.innerText = "Ошибка сети";
+        }
     }
 
     async function uploadCSV() {
@@ -817,5 +949,81 @@ https://www.tradingview.com/x/oukD8T9m/
             el.classList.remove('text-light');
         });
     }
+
+    async function deleteSelectedTrades() {
+        const checkboxes = document.querySelectorAll('.trade-cb:checked');
+
+        if (checkboxes.length === 0) {
+            return alert("Выберите хотя бы одну сделку галочкой для удаления!");
+        }
+
+        const idsToDelete = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+        if (!confirm(`ВНИМАНИЕ! Вы собираетесь навсегда удалить ${idsToDelete.length} выбранных сделок.\n\nПродолжить?`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}trades/bulk_delete/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ trade_ids: idsToDelete })
+            });
+
+            if (res.ok) {
+                const masterCb = document.getElementById('selectAllCb');
+                if (masterCb) masterCb.checked = false;
+
+                alert(`Удалено сделок: ${idsToDelete.length}`);
+                initPage();
+            } else {
+                alert("Ошибка при массовом удалении.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Ошибка сети.");
+        }
+    }
+
+    async function changeTradeDate(id, oldTime) {
+        const oldDateStr = oldTime.split('T')[0];
+        const newDate = prompt("Введите новую дату сделки (ГГГГ-ММ-ДД):", oldDateStr);
+
+        if (newDate && newDate !== oldDateStr) {
+            const fd = new FormData();
+            fd.append('time', `${newDate}T12:00:00Z`);
+
+            try {
+                const res = await fetch(`${API_BASE}trades/${id}/`, {
+                    method: 'PATCH',
+                    body: fd,
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    credentials: 'same-origin'
+                });
+
+                if (res.ok) {
+                    initPage();
+                } else {
+                    alert("Ошибка при обновлении даты в базе.");
+                }
+            } catch (e) {
+                alert("Ошибка сети");
+            }
+        }
+    }
+
+    let searchTimeout;
+    function handleSearchInput() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const searchVal = document.getElementById('filter-search').value;
+            localStorage.setItem('shared_sym', searchVal);
+            initPage();
+        }, 500);
+    }
+
 </script>
 {% endblock %}
