@@ -24,7 +24,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📚 База Знаний (FAQ)</h4>
-    <button class="btn btn-info fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#addTopicModal">➕ Новый вопрос</button>
+    <div>
+        <a href="/api/faq_topics/export_all_pdf/" target="_blank" class="btn btn-outline-light fw-bold me-2">
+            📄 Скачать всю базу (PDF)
+        </a>
+        <button class="btn btn-info fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#addTopicModal">➕ Новый вопрос</button>
+    </div>
 </div>
 
 <div class="card shadow p-2 mb-3 border-info bg-dark">

@@ -20,7 +20,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📖 Мой Дневник</h4>
     <div>
-        <button class="btn btn-warning fw-bold text-dark me-2" data-bs-toggle="modal" data-bs-target="#addManualTradeModal">➕ Чужая сделка</button>
         <button class="btn btn-outline-info fw-bold me-2" data-bs-toggle="offcanvas" data-bs-target="#rulesOffcanvas">🧠 Моя База (Правила)</button>
         <input type="file" id="csv-upload" accept=".csv" style="display: none;" onchange="uploadCSV()">
         <button class="btn btn-success" onclick="document.getElementById('csv-upload').click()">📥 Импорт (CSV)</button>
@@ -100,6 +99,7 @@
             <div class="col-12 text-end">
                 <button class="btn btn-sm btn-danger fw-bold me-2" onclick="deleteSelectedTrades()">🔥 Удалить выбранные</button>
                 <button class="btn btn-sm btn-success fw-bold" onclick="exportToExcel()">📊 Экспорт в Excel (CSV)</button>
+                <button class="btn btn-sm btn-outline-danger fw-bold me-2" onclick="exportFilteredPDF()">📄 Экспорт в PDF (Фильтр)</button>
             </div>
         </div>
     </div>
@@ -255,7 +255,7 @@ https://www.tradingview.com/x/oukD8T9m/
                                 </div>
                             </div>
                             <input type="text" id="my-url-input" class="form-control form-control-sm bg-dark text-light border-secondary mb-2" placeholder="Или вставь ссылку TradingView">
-                            <textarea id="my-desc" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Моя логика... (Что я ждал?)" rows="3"></textarea>
+                            <textarea id="my-desc" class="form-control bg-dark text-light border-secondary" placeholder="Моя логика... (Что я ждал?)" rows="6" style="font-size: 15px;"></textarea>
                             <button class="btn btn-warning mt-2 w-100 fw-bold" onclick="submitAnalysis('my')">Отправить мой анализ</button>
                         </div>
                     </div>
@@ -288,7 +288,7 @@ https://www.tradingview.com/x/oukD8T9m/
                                 <option value="EARLY_ENTRY">Спешка (вход до закрытия)</option>
                                 <option value="LOGIC_FAIL">Пиво / Галюны / Нет логики</option>
                             </select>
-                            <textarea id="rs-comment" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Цитата RS: 'Ты опять полез в хуйню...'" rows="2"></textarea>
+                            <textarea id="rs-comment" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Цитата RS: 'Ты опять полез в хуйню...'" rows="6" style="font-size: 15px;"></textarea>
                             <button class="btn btn-danger mt-2 w-100 fw-bold" onclick="submitAnalysis('rs')">Сохранить пиздюли</button>
                         </div>
                     </div>
@@ -302,6 +302,7 @@ https://www.tradingview.com/x/oukD8T9m/
 <div class="offcanvas offcanvas-end bg-dark text-light border-start border-secondary" tabindex="-1" id="rulesOffcanvas" style="width: 450px;">
     <div class="offcanvas-header border-bottom border-secondary bg-black">
         <h5 class="offcanvas-title text-info">🧠 Моя Торговая Конституция</h5>
+        <a href="/api/rules/export_pdf/" target="_blank" class="btn btn-sm btn-outline-info ms-auto me-3">📄 PDF</a>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
     <div class="offcanvas-body d-flex flex-column p-0" style="font-size: 0.9rem;">
@@ -732,16 +733,19 @@ https://www.tradingview.com/x/oukD8T9m/
     function clearSmartInput(prefix, event) { if(event) event.stopPropagation(); fileState[prefix] = null; document.getElementById(`${prefix}-file-input`).value = ''; document.getElementById(`${prefix}-url-input`).value = ''; document.getElementById(`${prefix}-preview-container`).classList.add('d-none'); document.getElementById(`${prefix}-drop-text`).classList.remove('d-none'); document.getElementById(`${prefix}-preview-img`).src = ''; }
 
     function detectTimeframe(line) {
-        const lower = line.trim().toLowerCase();
-        const clean = lower.replace(/:/g, '').trim();
-        if (clean.startsWith('таймфрейм 1h') || clean === '1h') return 'H1';
-        if (clean.startsWith('таймфрейм 4h') || clean === '4h') return 'H4';
-        if (clean.startsWith('таймфрейм 15m') || clean === '15m') return 'M15';
-        if (clean.startsWith('таймфрейм 5m') || clean === '5m') return 'M5';
-        if (clean.startsWith('таймфрейм 1m') || clean === '1m') return 'M1';
-        if (clean.startsWith('таймфрейм d1') || clean === 'd1') return 'D1';
-        if (clean === 'общее') return 'Общее';
-        if (clean === 'вход') return 'Вход';
+        // Убираем точки, двоеточия и сворачиваем двойные пробелы в один
+        const clean = line.trim().toLowerCase().replace(/[:.]/g, '').replace(/\s+/g, ' ');
+
+        if (clean.startsWith('таймфрейм h1') || clean.startsWith('таймфрейм 1h') || clean === 'h1' || clean === '1h') return 'H1';
+        if (clean.startsWith('таймфрейм h4') || clean.startsWith('таймфрейм 4h') || clean === 'h4' || clean === '4h') return 'H4';
+        if (clean.startsWith('таймфрейм m15') || clean.startsWith('таймфрейм 15m') || clean === 'm15' || clean === '15m') return 'M15';
+        if (clean.startsWith('таймфрейм m5') || clean.startsWith('таймфрейм 5m') || clean === 'm5' || clean === '5m') return 'M5';
+        if (clean.startsWith('таймфрейм m1') || clean.startsWith('таймфрейм 1m') || clean === 'm1' || clean === '1m') return 'M1';
+        if (clean.startsWith('таймфрейм d1') || clean.startsWith('таймфрейм 1d') || clean === 'd1' || clean === '1d') return 'D1';
+
+        if (clean.startsWith('общее') || clean.startsWith('вывод')) return 'Общее';
+        if (clean.startsWith('вход')) return 'Вход';
+
         return null;
     }
 
@@ -755,28 +759,49 @@ https://www.tradingview.com/x/oukD8T9m/
 
         let blocks = [];
         let currentBlock = null;
+
+        // Разбиваем текст по переносам строк, но не теряем пустые строки
         const lines = text.split('\n');
 
-        for (let line of lines) {
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
             let tf = detectTimeframe(line);
+
+            // Если нашли новый таймфрейм (или слово Вывод)
             if (tf) {
+                // Сохраняем предыдущий блок (если он был)
                 if (currentBlock) blocks.push(currentBlock);
+                // Начинаем новый
                 currentBlock = { tf: tf, url: '', desc: [] };
                 continue;
             }
 
+            // Если мы уже внутри какого-то таймфрейма, собираем данные
             if (currentBlock) {
+                // Ищем ссылку на TradingView
                 let urlMatch = line.match(/https:\/\/(?:www\.)?tradingview\.com\/x\/[a-zA-Z0-9_-]+\/?/);
+
                 if (urlMatch && !currentBlock.url) {
                     currentBlock.url = urlMatch[0];
+                    // Если после ссылки на той же строке есть текст, забираем его
                     let textAfter = line.replace(currentBlock.url, '').trim();
                     if (textAfter) currentBlock.desc.push(textAfter);
                 } else {
-                    if (line.trim()) currentBlock.desc.push(line.trim());
+                    // Это просто текст описания. Добавляем его в массив.
+                    // Даже если строка пустая, мы её сохраняем, чтобы сохранить абзацы!
+                    currentBlock.desc.push(line.trim());
                 }
             }
         }
+
+        // Не забываем сохранить последний блок, когда цикл закончился
         if (currentBlock) blocks.push(currentBlock);
+
+        // Очищаем пустые строки в начале и конце описания каждого блока
+        blocks = blocks.map(b => {
+            b.description = b.desc.join('\n').trim();
+            return b;
+        });
 
         if (blocks.length === 0) {
             btn.disabled = false;
@@ -786,11 +811,12 @@ https://www.tradingview.com/x/oukD8T9m/
 
         let successCount = 0;
         for (let block of blocks) {
-            if (!block.url && block.desc.length === 0) continue;
+            // Если нет ни ссылки, ни описания — пропускаем
+            if (!block.url && !block.description) continue;
 
             const fd = new FormData();
             fd.append('timeframe', block.tf);
-            fd.append('description', block.desc.join('\n').trim());
+            fd.append('description', block.description);
             if (block.url) fd.append('image_url', block.url);
             fd.append('is_processed', 'true');
 
@@ -1024,6 +1050,21 @@ https://www.tradingview.com/x/oukD8T9m/
             initPage();
         }, 500);
     }
+    function exportFilteredPDF() {
+    const searchVal = document.getElementById('filter-search').value;
+    const pnlVal = document.getElementById('filter-pnl').value;
+    const typeVal = document.getElementById('filter-type').value;
+
+    // Собираем все текущие фильтры в строку запроса
+    let params = new URLSearchParams({
+        is_processed: 'true',
+        search: searchVal,
+        pnl: pnlVal,
+        type: typeVal
+    });
+
+    window.open(`${API_BASE}trades/export_filtered_pdf/?${params.toString()}`, '_blank');
+}
 
 </script>
 {% endblock %}

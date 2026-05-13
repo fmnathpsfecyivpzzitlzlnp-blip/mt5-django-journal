@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: "DejaVu", sans-serif; font-size: 12px; color: #333; }
+        .trade-header { background: #f0f0f0; padding: 10px; border-left: 5px solid #0dcaf0; margin-top: 30px; }
+        .profit-pos { color: green; font-weight: bold; }
+        .profit-neg { color: red; font-weight: bold; }
+        .screen-block { margin: 10px 0; border: 1px solid #ddd; padding: 10px; }
+        .screen-block img { max-width: 100%; height: auto; }
+        .mentor-block { background: #fff0f0; border-left: 4px solid #dc3545; padding: 10px; margin-top: 5px; }
+        .warning-limit { text-align: center; color: red; font-weight: bold; margin-bottom: 20px; border: 1px solid red; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">📊 Отчет по сделкам</h1>
+    <p style="text-align: center;">Выгружено сделок: {{ trades|length }}</p>
+
+    {% if trades|length == 100 %}
+        <div class="warning-limit">⚠️ Показаны только последние 100 сделок. Используйте фильтры на сайте для более точной выгрузки.</div>
+    {% endif %}
+
+    {% for t in trades %}
+        <div class="trade-header">
+            <strong>#{{ t.ticket }} | {{ t.symbol }} | {{ t.time|date:"d.m.Y H:i" }}</strong><br>
+            Тип: {{ t.type }} | Профит: <span class="{% if t.profit > 0 %}profit-pos{% else %}profit-neg{% endif %}">${{ t.profit }}</span>
+        </div>
+
+        <p><i>Логика: {{ t.entry_logic }} | План: {{ t.comment|default:"-" }}</i></p>
+
+        {% for s in t.analysis_screens.all %}
+            <div class="screen-block">
+                <strong>📸 {{ s.timeframe }}:</strong> {{ s.description }}<br>
+                {% if s.image %}<img src="{{ s.image.url }}" />{% endif %}
+            </div>
+        {% endfor %}
+
+        {% for r in t.mentor_reviews.all %}
+            <div class="mentor-block">
+                <strong>🔥 Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment }}<br>
+                {% if r.image %}<img src="{{ r.image.url }}" style="max-width: 100%;" />{% endif %}
+            </div>
+        {% endfor %}
+
+        {% if not forloop.last %}
+            <pdf:nextpage />
+        {% endif %}
+    {% endfor %}
+</body>
+</html>

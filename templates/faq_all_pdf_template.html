@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Полная База Знаний</title>
+    <style>
+        @page {
+            size: A4; margin: 2cm; margin-bottom: 2.5cm;
+            @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 2cm; margin-right: 2cm; height: 1cm; }
+        }
+        body { font-family: "DejaVu", sans-serif; font-size: 14px; color: #333; line-height: 1.5; }
+
+        h1 { text-align: center; color: #0dcaf0; border-bottom: 3px solid #0dcaf0; padding-bottom: 15px; margin-bottom: 30px; }
+        h2 { color: #dc3545; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 40px; }
+        h3 { color: #000; margin-top: 10px; font-size: 16px; background-color: #f0f0f0; padding: 10px; border-radius: 5px; }
+
+        .block { margin-bottom: 20px; page-break-inside: avoid; }
+        .block img { max-width: 100%; height: auto; display: block; margin: 15px 0; border: 1px solid #ddd; }
+        .block-text { background: #f8f9fa; padding: 15px; border-left: 4px solid #0dcaf0; }
+
+        /* Стили оглавления */
+        .toc { margin-bottom: 40px; background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; }
+        .toc-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; text-align: center; text-transform: uppercase; }
+        .toc-cat { font-size: 16px; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 3px; }
+        .toc-topic { font-size: 14px; margin-left: 15px; margin-bottom: 8px; font-weight: bold; } /* Жирный шрифт в оглавлении */
+
+        a { text-decoration: none; color: #0dcaf0; }
+        .toc-topic a { color: #333; }
+        .page-num { color: #888; font-size: 12px; font-weight: normal; }
+
+        /* Кнопки навигации внутри разделов */
+        .nav-buttons { text-align: right; margin-bottom: 0px; margin-top: 30px; }
+        .nav-btn { font-size: 10px; color: #666; border: 1px solid #ccc; padding: 4px 8px; background: #fff; text-decoration: none; border-radius: 3px; margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="footer_content" style="text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
+        Моя торговая база • Квантовый Дневник | Страница <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
+    <!-- ЯКОРЬ ДЛЯ ВОЗВРАТА К ОГЛАВЛЕНИЮ -->
+    <a name="toc" id="toc"></a>
+
+    <h1>Полная База Знаний</h1>
+    <p style="text-align: center; color: #666; margin-bottom: 40px;">Сгенерировано: {% now "d.m.Y" %}</p>
+
+    {% regroup topics by category as category_list %}
+
+    <!-- ОГЛАВЛЕНИЕ СО СПИСКОМ ТЕМ И НОМЕРАМИ СТРАНИЦ -->
+    {% if category_list %}
+    <div class="toc">
+        <div class="toc-title">Оглавление</div>
+        {% for category in category_list %}
+            <div class="toc-cat">
+                <a href="#cat-{{ forloop.counter }}">{{ category.grouper|default:"Разное" }}</a>
+                <!-- Динамический подсчет страницы для категории -->
+                <span class="page-num">(стр. <pdf:pagenumber ref="cat-{{ forloop.counter }}" />)</span>
+            </div>
+
+            {% for topic in category.list %}
+                <div class="toc-topic">
+                    <a href="#topic-{{ topic.id }}">{{ topic.question }}</a>
+                    <!-- Динамический подсчет страницы для конкретного вопроса -->
+                    <span class="page-num">... стр. <pdf:pagenumber ref="topic-{{ topic.id }}" /></span>
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+
+    <!-- Перекидываем на новую страницу после оглавления -->
+    <pdf:nextpage />
+    {% endif %}
+
+    <!-- ОСНОВНОЙ ТЕКСТ (ОТВЕТЫ) -->
+    {% for category in category_list %}
+        <!-- Якорь категории -->
+        <a name="cat-{{ forloop.counter }}" id="cat-{{ forloop.counter }}"></a>
+        <h2>{{ category.grouper|default:"Разное" }}</h2>
+
+        {% for topic in category.list %}
+            <!-- КНОПКИ НАВИГАЦИИ -->
+            <div class="nav-buttons">
+                <a href="#toc" class="nav-btn">К оглавлению &uarr;</a>
+                <a href="#cat-{{ forloop.parentloop.counter }}" class="nav-btn">В начало раздела &uarr;</a>
+            </div>
+
+            <!-- Якорь вопроса -->
+            <a name="topic-{{ topic.id }}" id="topic-{{ topic.id }}"></a>
+            <h3>{{ topic.question }}</h3>
+
+            {% for block in topic.blocks.all %}
+                <div class="block">
+                    {% if block.image %}
+                        <img src="{{ block.image.url }}">
+                    {% endif %}
+                    {% if block.text %}
+                        <div class="block-text">{{ block.text|linebreaksbr }}</div>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <p><i>(Ответов пока нет)</i></p>
+            {% endfor %}
+        {% endfor %}
+    {% endfor %}
+</body>
+</html>

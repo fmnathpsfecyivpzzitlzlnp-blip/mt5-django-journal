@@ -2,6 +2,7 @@ import os
 import urllib.request
 import re
 from urllib.parse import unquote
+import sys
 
 import requests
 from django.conf import settings
@@ -118,6 +119,60 @@ class PlaybookViewSet(viewsets.ViewSet):
 class TradeViewSet(viewsets.ModelViewSet):
     serializer_class = TradeSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=False, methods=['get'])
+    def export_filtered_pdf(self, request):
+        # Временно увеличиваем лимит рекурсии для тяжелых PDF файлов
+        sys.setrecursionlimit(5000)
+
+        # 1. Берем базовый запрос (только обработанные сделки пользователя)
+        qs = Trade.objects.filter(user=request.user, is_processed=True).order_by('-time')
+
+        # 2. Применяем текстовый поиск
+        search_query = request.query_params.get('search')
+        if search_query:
+            qs = qs.filter(
+                Q(ticket__icontains=search_query) |
+                Q(symbol__icontains=search_query) |
+                Q(comment__icontains=search_query) |
+                Q(mt5_comment__icontains=search_query) |
+                Q(analysis_screens__description__icontains=search_query) |
+                Q(mentor_reviews__mentor_comment__icontains=search_query)
+            ).distinct()
+
+        # 3. Применяем остальные фильтры (PnL, Тип и т.д.)
+        pnl_val = request.query_params.get('pnl')
+        if pnl_val == 'win':
+            qs = qs.filter(profit__gt=0)
+        elif pnl_val == 'loss':
+            qs = qs.filter(profit__lt=0)
+
+        trade_type = request.query_params.get('type')
+        if trade_type: qs = qs.filter(type=trade_type)
+
+        # 🛑 ПРЕДОХРАНИТЕЛЬ: ограничиваем 100 сделками за раз
+        # Это защитит сервер от падения по памяти, если фильтры пустые
+        qs = qs[:100]
+
+        # 4. Генерация PDF
+        font_path = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans.ttf')
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', font_path))
+            DEFAULT_FONT['sans-serif'] = 'DejaVu'
+        except:
+            pass
+
+        context = {'trades': qs, 'user': request.user}
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="Filtered_Trades_Report.pdf"'
+
+        template = get_template('trades_list_pdf_template.html')
+        html = template.render(context)
+        pisa_status = pisa.CreatePDF(html, dest=response, encoding='utf-8', link_callback=link_callback)
+
+        if pisa_status.err:
+            return HttpResponse('Ошибка при создании PDF', status=500)
+        return response
 
     @action(detail=True, methods=['post'])
     def copy_trade(self, request, pk=None):
@@ -711,6 +766,26 @@ class TradingRuleViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    # 👇 НОВЫЙ БЛОК ДЛЯ ВЫГРУЗКИ КОНСТИТУЦИИ 👇
+    @action(detail=False, methods=['get'])
+    def export_pdf(self, request):
+        rules = TradingRule.objects.filter(user=request.user).order_by('category', 'created_at')
+        font_path = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans.ttf')
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', font_path))
+            DEFAULT_FONT['sans-serif'] = 'DejaVu'
+        except:
+            pass
+
+        context = {'rules': rules, 'user': request.user}
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="Trading_Constitution.pdf"'
+
+        template = get_template('rules_pdf_template.html')
+        html = template.render(context)
+        pisa.CreatePDF(html, dest=response, encoding='utf-8')
+        return response
+
 def faq_view(request):
     return render(request, 'faq.html')
 
@@ -782,6 +857,45 @@ class FAQTopicViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="FAQ_{topic.id}.pdf"'
 
         template = get_template('faq_pdf_template.html')
+        html = template.render(context)
+
+        pisa_status = pisa.CreatePDF(
+            html,
+            dest=response,
+            link_callback=link_callback,
+            encoding='utf-8'
+        )
+
+        if pisa_status.err:
+            return HttpResponse('Ошибка при создании PDF', status=500)
+        return response
+
+    @action(detail=False, methods=['get'])
+    def export_all_pdf(self, request):
+        # Достаем ВСЕ темы пользователя и сортируем их по категориям
+        topics = FAQTopic.objects.filter(user=request.user).order_by('category', '-created_at')
+
+        font_path = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans.ttf')
+        font_path_bold = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans-Bold.ttf')
+
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', font_path))
+            pdfmetrics.registerFont(TTFont('DejaVu-Bold', font_path_bold))
+            DEFAULT_FONT['sans-serif'] = 'DejaVu'
+            DEFAULT_FONT['helvetica'] = 'DejaVu'
+            DEFAULT_FONT['arial'] = 'DejaVu'
+        except Exception as e:
+            print(f"Ошибка загрузки шрифта: {e}")
+
+        context = {
+            'topics': topics,
+            'user': request.user,
+        }
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="My_Trading_Base_All.pdf"'
+
+        template = get_template('faq_all_pdf_template.html')
         html = template.render(context)
 
         pisa_status = pisa.CreatePDF(

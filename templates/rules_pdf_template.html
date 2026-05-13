@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page { size: A4; margin: 2cm; @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 2cm; margin-right: 2cm; height: 1cm; } }
+        body { font-family: "DejaVu", sans-serif; font-size: 14px; color: #333; line-height: 1.5; }
+        h1 { text-align: center; color: #0dcaf0; border-bottom: 3px solid #0dcaf0; padding-bottom: 15px; margin-bottom: 30px; }
+        h2 { color: #dc3545; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 30px; }
+        ul { margin-top: 10px; padding-left: 20px; }
+        li { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div id="footer_content" style="text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
+        Моя Торговая Конституция | Страница <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
+    <h1>🧠 Моя Торговая Конституция</h1>
+    <p style="text-align: center; color: #666; margin-bottom: 40px;">Сгенерировано: {% now "d.m.Y" %}</p>
+
+    {% regroup rules by category as cat_list %}
+    {% for category in cat_list %}
+        <h2>
+            {% if category.grouper == 'rev_entry' %}🔄 Вход: РАЗВОРОТ
+            {% elif category.grouper == 'trend_entry' %}✅ Вход: ПО ТРЕНДУ
+            {% elif category.grouper == 'psy_base' %}🛑 ПСИХОЛОГИЯ И БАЗА
+            {% else %}{{ category.grouper }}{% endif %}
+        </h2>
+        <ul>
+        {% for rule in category.list %}
+            <li>{{ rule.text|linebreaksbr }}</li>
+        {% endfor %}
+        </ul>
+    {% empty %}
+        <p>Конституция пуста.</p>
+    {% endfor %}
+</body>
+</html>
