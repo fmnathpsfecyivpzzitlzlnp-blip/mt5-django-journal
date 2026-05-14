@@ -7,6 +7,9 @@ class TradeScreenshotSerializer(serializers.ModelSerializer):
     class Meta:
         model = TradeScreenshot
         fields = '__all__'
+        extra_kwargs = {
+            'image': {'required': False, 'allow_null': True}
+        }
 
 class ReviewStepSerializer(serializers.ModelSerializer):
     class Meta:

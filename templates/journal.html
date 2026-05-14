@@ -715,7 +715,11 @@ https://www.tradingview.com/x/oukD8T9m/
                 html += `<div class="tf-comparison-row"><div class="tf-comparison-header"><h4 class="text-info m-0 fw-bold">${tf}</h4></div><div class="row"><div class="col-md-6 border-end border-secondary pe-4">`;
                 myTfScreens.forEach(s => {
                     let imgUrl = s.image; if (imgUrl && !imgUrl.startsWith('http') && !imgUrl.startsWith('/')) imgUrl = '/media/' + imgUrl;
-                    html += `<div class="card bg-dark border-warning mb-3 shadow"><div class="card-header p-1 bg-dark text-end"><button class="btn btn-sm btn-danger py-0 px-2" onclick="deleteFeedItem('my', ${s.id})">🗑️</button></div><div class="resizable-image-container"><img src="${imgUrl}" onclick="window.open('${imgUrl}')"></div><div class="card-body p-2"><p class="small text-light m-0 dynamic-caption" style="transition: 0.2s;">${s.description || '...'}</p></div></div>`;
+
+                    // Рисуем рамку только если картинка реально есть
+                    let imgHtml = imgUrl ? `<div class="resizable-image-container"><img src="${imgUrl}" onclick="window.open('${imgUrl}')"></div>` : '';
+
+                    html += `<div class="card bg-dark border-warning mb-3 shadow"><div class="card-header p-1 bg-dark text-end"><button class="btn btn-sm btn-danger py-0 px-2" onclick="deleteFeedItem('my', ${s.id})">🗑️</button></div>${imgHtml}<div class="card-body p-2"><p class="small text-light m-0 dynamic-caption" style="transition: 0.2s; white-space: pre-wrap;">${s.description || '...'}</p></div></div>`;
                 });
                 html += `</div><div class="col-md-6 ps-4">`;
                 rsTfReviews.forEach(r => {
@@ -855,7 +859,11 @@ https://www.tradingview.com/x/oukD8T9m/
             fd.append('image_url', urlValue);
         } else {
             if (type === 'my') {
-                return alert("Вставь картинку или ссылку!");
+                // Если картинки нет, проверяем, есть ли текст
+                const descText = document.getElementById('my-desc').value.trim();
+                if (!descText) {
+                    return alert("Добавь картинку, ссылку или хотя бы напиши текст!");
+                }
             } else if (type === 'rs') {
                 const text = document.getElementById('rs-comment').value.trim();
                 const error = document.getElementById('rs-error').value;
@@ -924,7 +932,10 @@ https://www.tradingview.com/x/oukD8T9m/
                 await loadReviewFeeds();
                 initPage();
             } else {
-                alert("Ошибка сохранения на сервере!");
+                // 👇 ТЕПЕРЬ СЕРВЕР СКАЖЕТ НАМ ПРАВДУ 👇
+                const errText = await res1.text();
+                alert(`Сервер отклонил запрос (400)!\nПричина: ${errText}`);
+                console.error("Ошибка 400:", errText);
                 btn.disabled = false;
                 btn.innerText = originalText;
             }

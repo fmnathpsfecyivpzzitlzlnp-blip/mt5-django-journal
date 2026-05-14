@@ -53,7 +53,7 @@ class Trade(models.Model):
 class TradeScreenshot(models.Model):
     trade = models.ForeignKey(Trade, related_name='analysis_screens', on_delete=models.CASCADE)
     timeframe = models.CharField(max_length=10)  # H1, M15, M5, M1
-    image = models.ImageField(upload_to='trades/analysis/')
+    image = models.ImageField(upload_to='trades/analysis/', blank=True, null=True)
     description = models.TextField(blank=True, null=True)  # Твои мысли: "Тут я видел слом"
 
 

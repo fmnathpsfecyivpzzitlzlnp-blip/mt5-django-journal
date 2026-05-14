@@ -568,7 +568,7 @@ class TradeViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 return Response({"error": f"Ошибка соединения с TradingView: {str(e)}"}, status=400)
 
-        if not image:
+        if not image and not description.strip():
             return Response({"error": "Нужен скриншот или рабочая ссылка!"}, status=400)
 
         TradeScreenshot.objects.create(
@@ -604,6 +604,9 @@ class TradeViewSet(viewsets.ModelViewSet):
 
         last_step = trade.mentor_reviews.order_by('-step_order').first()
         next_order = (last_step.step_order + 1) if last_step else 1
+
+        if not image and not mentor_comment.strip() and not error_type:
+            return Response({"error": "Нужно заполнить текст разбора или прикрепить скриншот!"}, status=400)
 
         ReviewStep.objects.create(
             trade=trade, step_order=next_order, error_type=error_type,
