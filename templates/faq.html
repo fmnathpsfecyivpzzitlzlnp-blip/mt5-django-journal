@@ -242,12 +242,20 @@
                                 </div>
                             </div>
 
-                            <div class="d-flex justify-content-between mt-3 border-top border-secondary pt-2">
-                                <a href="/api/faq_topics/${t.id}/export_pdf/" class="btn btn-sm btn-outline-info py-0">
+                            <div class="d-flex justify-content-between align-items-center mt-3 border-top border-secondary pt-3 pb-1">
+                                <a href="/api/faq_topics/${t.id}/export_pdf/" class="btn btn-sm btn-outline-info">
                                     📄 Экспорт в PDF
                                 </a>
 
-                                <button class="btn btn-sm btn-outline-danger py-0" onclick="deleteTopic(${t.id})">
+                                <!-- 👇 НОВАЯ КНОПКА СВЕРНУТЬ 👇 -->
+                                <button type="button" class="btn btn-sm btn-warning fw-bold text-dark px-4 shadow"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#collapse-${t.id}"
+                                        onclick="document.getElementById('heading-${t.id}').scrollIntoView({behavior: 'smooth', block: 'start'})">
+                                    🔼 Свернуть
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteTopic(${t.id})">
                                     🗑️ Удалить всю тему
                                 </button>
                             </div>

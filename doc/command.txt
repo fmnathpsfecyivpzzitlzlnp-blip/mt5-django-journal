@@ -1,2 +1,5 @@
 
 start server:  python manage.py runserver --noreload
+git status
+git add .
+ git commit -m "feat: implement advanced bulk PDF exports and improve journal parser" -m "- PDF Exports: Added endpoints and HTML templates to export the full FAQ (Knowledge Base), Trading Constitution, and Filtered Trades list. - PDF Formatting: Implemented Table of Contents (TOC) with clickable anchors, automatic page numbering, and internal navigation links. - Text Rendering: Preserved line breaks in PDF outputs and removed unsupported emojis to fix rendering issues. - xhtml2pdf Fixes: Resolved 'RecursionError' by properly self-closing <img /> tags and adding a 100-record safeguard for heavy exports. - Journal Parser: Upgraded the auto-parser to capture multiline text, support alternative timeframe formats, and map 'Вывод' to the General tab. - UI Improvements: Increased the height of the manual entry textarea."
