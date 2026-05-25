@@ -17,6 +17,7 @@
 {% endblock %}
 
 {% block content %}
+<div style="display: none;">{% csrf_token %}</div>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="text-light">📖 Мой Дневник</h4>
     <div>
@@ -240,7 +241,7 @@ https://www.tradingview.com/x/oukD8T9m/
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h6 class="text-warning m-0">🤷‍♂️ Мой скриншот (Ручной)</h6>
                                 <select id="my-tf" class="form-select form-select-sm bg-dark text-warning border-secondary w-auto fw-bold">
-                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option><option value="Вход">Вход</option>
+                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M30">M30</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option><option value="Вход">Вход</option>
                                 </select>
                             </div>
                             <div id="my-dropzone" tabindex="0" class="smart-dropzone p-3 mb-2 text-center rounded position-relative" style="border: 2px dashed #ffc107; outline: none; cursor: default;">
@@ -265,7 +266,7 @@ https://www.tradingview.com/x/oukD8T9m/
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h6 class="text-danger m-0">🔥 Скриншот от RS</h6>
                                 <select id="rs-tf" class="form-select form-select-sm bg-dark text-danger border-secondary w-auto fw-bold">
-                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option>
+                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M30">M30</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option>
                                 </select>
                             </div>
                             <div id="rs-dropzone" tabindex="0" class="smart-dropzone-danger p-3 mb-2 text-center rounded position-relative" style="border: 2px dashed #dc3545; outline: none; cursor: default;">
@@ -708,7 +709,7 @@ https://www.tradingview.com/x/oukD8T9m/
         const res = await fetch(`${API_BASE}trades/${currentReviewTradeId}/`); const trade = await res.json();
         const myScreens = trade.analysis_screens || []; const rsReviews = trade.mentor_reviews || [];
         if (myScreens.length === 0 && rsReviews.length === 0) { feedContainer.innerHTML = '<div class="alert alert-dark text-center text-muted border-secondary mt-4">Лента пуста.</div>'; return; }
-        const order = ['Общее', 'D1', 'H4', 'H1', 'M15', 'M5', 'M1', 'Вход']; let html = '';
+        const order = ['Общее', 'D1', 'H4', 'H1', 'M30', 'M15', 'M5', 'M1', 'Вход']; let html = '';
         order.forEach(tf => {
             const myTfScreens = myScreens.filter(s => s.timeframe === tf); const rsTfReviews = rsReviews.filter(r => r.timeframe === tf || (!r.timeframe && tf === 'Общее'));
             if (myTfScreens.length > 0 || rsTfReviews.length > 0) {
@@ -742,6 +743,7 @@ https://www.tradingview.com/x/oukD8T9m/
 
         if (clean.startsWith('таймфрейм h1') || clean.startsWith('таймфрейм 1h') || clean === 'h1' || clean === '1h') return 'H1';
         if (clean.startsWith('таймфрейм h4') || clean.startsWith('таймфрейм 4h') || clean === 'h4' || clean === '4h') return 'H4';
+        if (clean.startsWith('таймфрейм m30') || clean.startsWith('таймфрейм 30m') || clean === 'm30' || clean === '30m') return 'M30';
         if (clean.startsWith('таймфрейм m15') || clean.startsWith('таймфрейм 15m') || clean === 'm15' || clean === '15m') return 'M15';
         if (clean.startsWith('таймфрейм m5') || clean.startsWith('таймфрейм 5m') || clean === 'm5' || clean === '5m') return 'M5';
         if (clean.startsWith('таймфрейм m1') || clean.startsWith('таймфрейм 1m') || clean === 'm1' || clean === '1m') return 'M1';
@@ -1076,6 +1078,47 @@ https://www.tradingview.com/x/oukD8T9m/
 
     window.open(`${API_BASE}trades/export_filtered_pdf/?${params.toString()}`, '_blank');
 }
+async function createManualTrade() {
+        const payload = {
+            author: document.getElementById('manual-author').value,
+            symbol: document.getElementById('manual-symbol').value,
+            type: document.getElementById('manual-type').value,
+            profit: document.getElementById('manual-profit').value,
+            date: document.getElementById('manual-date').value
+        };
 
+        try {
+            const res = await fetch(`${API_BASE}trades/add_manual/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const modalEl = document.getElementById('addManualTradeModal');
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+
+                document.getElementById('manual-author').value = '';
+                document.getElementById('manual-profit').value = '';
+                document.getElementById('manual-date').value = '';
+
+                initPage();
+            } else {
+                const errText = await res.text();
+                alert(`Ошибка сервера при добавлении! Пожалуйста, нажми Ctrl+F5.\n\nДетали: ${errText}`);
+                console.error("Ошибка:", errText);
+            }
+        } catch (e) {
+            console.error("Ошибка сети:", e);
+            alert("Ошибка сети. Проверьте консоль браузера.");
+        }
+    }
 </script>
 {% endblock %}

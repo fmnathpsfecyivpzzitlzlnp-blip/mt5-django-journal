@@ -2,51 +2,164 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <title>Отчет по сделкам</title>
     <style>
-        @page { size: A4; margin: 1.5cm; }
-        body { font-family: "DejaVu", sans-serif; font-size: 12px; color: #333; }
-        .trade-header { background: #f0f0f0; padding: 10px; border-left: 5px solid #0dcaf0; margin-top: 30px; }
+        @page {
+            size: A4; margin: 1.5cm; margin-bottom: 2.5cm;
+            @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 1.5cm; margin-right: 1.5cm; height: 1cm; }
+        }
+        body { font-family: "DejaVu", sans-serif; font-size: 12px; color: #333; line-height: 1.4; }
+
+        h1 { text-align: center; color: #0dcaf0; border-bottom: 3px solid #0dcaf0; padding-bottom: 15px; margin-bottom: 30px; text-transform: uppercase; }
+
+        /* Стили оглавления */
+        .toc { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 30px; }
+        .toc-title { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 15px; text-transform: uppercase; color: #333; }
+        .toc-item { font-size: 13px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px dashed #eee; padding-bottom: 4px; }
+        .toc-item a { color: #222; text-decoration: none; }
+
+        /* Стили разделов сделок */
+        .trade-header { background: #f0f0f0; padding: 10px; border-left: 5px solid #0dcaf0; margin-top: 5px; }
         .profit-pos { color: green; font-weight: bold; }
         .profit-neg { color: red; font-weight: bold; }
-        .screen-block { margin: 10px 0; border: 1px solid #ddd; padding: 10px; }
-        .screen-block img { max-width: 100%; height: auto; }
-        .mentor-block { background: #fff0f0; border-left: 4px solid #dc3545; padding: 10px; margin-top: 5px; }
-        .warning-limit { text-align: center; color: red; font-weight: bold; margin-bottom: 20px; border: 1px solid red; padding: 10px; }
+
+        .screen-block { margin: 15px 0; border: 1px solid #ddd; padding: 10px; page-break-inside: avoid; }
+        .screen-block img { max-width: 100%; height: auto; display: block; margin-top: 8px; }
+
+        .mentor-block { background: #fff0f0; border-left: 4px solid #dc3545; padding: 10px; margin-top: 15px; page-break-inside: avoid; }
+        .mentor-block img { max-width: 100%; height: auto; display: block; margin-top: 8px; }
+
+        .warning-limit { text-align: center; color: red; font-weight: bold; margin-bottom: 20px; border: 1px solid red; padding: 10px; background: #fff5f5; }
+
+        /* Кнопки навигации */
+        .nav-buttons { text-align: right; margin-top: 25px; margin-bottom: 5px; }
+        .nav-btn { font-size: 10px; color: #555; border: 1px solid #ccc; padding: 3px 8px; background: #fff; text-decoration: none; border-radius: 3px; margin-left: 5px; }
     </style>
 </head>
 <body>
-    <h1 style="text-align: center;">📊 Отчет по сделкам</h1>
-    <p style="text-align: center;">Выгружено сделок: {{ trades|length }}</p>
+    <div id="footer_content" style="text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
+        Торговый отчет • Квантовый Дневник | Страница <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
+    <a name="toc" id="toc"></a>
+
+    <h1>Отчет по сделкам</h1>
+    <p style="text-align: center; color: #666; margin-bottom: 30px;">Сгенерировано: {% now "d.m.Y H:i" %}</p>
+    <p style="text-align: center; font-weight: bold; margin-bottom: 30px;">Выгружено сделок: {{ trades|length }}</p>
 
     {% if trades|length == 100 %}
-        <div class="warning-limit">⚠️ Показаны только последние 100 сделок. Используйте фильтры на сайте для более точной выгрузки.</div>
+        <div class="warning-limit">ВНИМАНИЕ: Показываются только первые 100 найденных сделок. Используйте фильтры для точечной выгрузки.</div>
+    {% endif %}
+
+    {% if trades %}
+    <div class="toc">
+        <div class="toc-title">Содержание отчета</div>
+        {% for t in trades %}
+            <div class="toc-item">
+                <a href="#trade-{{ t.id }}">
+                    Сделка #{{ t.ticket }} | {{ t.symbol }} | {{ t.time|date:"d.m.Y H:i" }}
+                    (Профит: {% if t.profit > 0 %}+{% endif %}${{ t.profit }})
+                </a>
+            </div>
+        {% endfor %}
+    </div>
+    <pdf:nextpage />
     {% endif %}
 
     {% for t in trades %}
+        <div class="nav-buttons">
+            <a href="#toc" class="nav-btn">К оглавлению &uarr;</a>
+            <a href="#trade-{{ t.id }}" class="nav-btn">В начало сделки &uarr;</a>
+        </div>
+
+        <a name="trade-{{ t.id }}" id="trade-{{ t.id }}"></a>
+
         <div class="trade-header">
             <strong>#{{ t.ticket }} | {{ t.symbol }} | {{ t.time|date:"d.m.Y H:i" }}</strong><br>
             Тип: {{ t.type }} | Профит: <span class="{% if t.profit > 0 %}profit-pos{% else %}profit-neg{% endif %}">${{ t.profit }}</span>
         </div>
 
-        <p><i>Логика: {{ t.entry_logic }} | План: {{ t.comment|default:"-" }}</i></p>
+        <p style="margin-top: 10px; margin-bottom: 15px; padding-left: 5px;">
+            <i>Логика: {{ t.entry_logic }} | План: {{ t.comment|default:"-"|linebreaksbr }}</i>
+        </p>
 
-        {% for s in t.analysis_screens.all %}
-            <div class="screen-block">
-                <strong>📸 {{ s.timeframe }}:</strong> {{ s.description }}<br>
-                {% if s.image %}<img src="{{ s.image.url }}" />{% endif %}
-            </div>
-        {% endfor %}
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'D1' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
 
-        {% for r in t.mentor_reviews.all %}
-            <div class="mentor-block">
-                <strong>🔥 Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment }}<br>
-                {% if r.image %}<img src="{{ r.image.url }}" style="max-width: 100%;" />{% endif %}
-            </div>
-        {% endfor %}
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'H4' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'H1' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'M30' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'M15' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'M5' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'M1' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'Вход' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'Общее' %}
+            <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'D1' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'H4' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'H1' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'M30' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'M15' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'M5' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'M1' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'Вход' %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'Общее' or not r.timeframe %}
+            <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe|default:"Общее" }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
 
         {% if not forloop.last %}
             <pdf:nextpage />
         {% endif %}
+    {% empty %}
+        <p style="text-align: center; margin-top: 50px;">Нет сделок для отображения.</p>
     {% endfor %}
 </body>
 </html>

@@ -12,12 +12,14 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="text-light">📘 Мой Playbook (Эталонные Сетапы)</h4>
-    <div>
-        <button class="btn btn-outline-info fw-bold me-2" data-bs-toggle="offcanvas" data-bs-target="#mindsetOffcanvas">
-            🧘‍♂️ Дзен Трейдера (Настрой)
+    <h4 class="text-light">📘 Мой Playbook</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <input type="text" id="pb-search" class="form-control bg-dark text-light border-secondary" placeholder="🔍 Поиск по названию или описанию..." oninput="loadPlaybook()" style="min-width: 300px;">
+
+        <button class="btn btn-outline-info fw-bold text-nowrap" data-bs-toggle="offcanvas" data-bs-target="#mindsetOffcanvas">
+            🧘‍♂️ Дзен Трейдера
         </button>
-        <button class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#addPlaybookModal">➕ Добавить Сетап</button>
+        <button class="btn btn-warning fw-bold text-nowrap" data-bs-toggle="modal" data-bs-target="#addPlaybookModal">➕ Добавить Сетап</button>
     </div>
 </div>
 
@@ -88,6 +90,14 @@
             <div class="card-body row g-3" id="pb-range-short" style="min-height: 250px; align-content: flex-start;"></div>
         </div>
     </div>
+    <div class="col-md-12">
+        <div class="card bg-dark border-secondary h-100 shadow mt-2">
+            <div class="card-header bg-secondary bg-opacity-10 border-secondary text-light fw-bold text-center">
+                🧩 СЛОЖНЫЕ СЕТАПЫ / МУЛЬТИ-ТФ / БЕЗ КАТЕГОРИИ
+            </div>
+            <div class="card-body row g-3" id="pb-other" style="min-height: 200px; align-content: flex-start;"></div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="addPlaybookModal" tabindex="-1">
@@ -126,6 +136,7 @@
                             <option value="Лонговый">📈 Лонговый</option>
                             <option value="Шортовый">📉 Шортовый</option>
                             <option value="Боковик">↔️ Боковик (Range)</option>
+                            <option value="Другое">🧩 Без тренда / Мульти-ТФ</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -135,6 +146,7 @@
                             <option value="Разворот">🔄 Разворот</option>
                             <option value="От нижней границы">📈 От нижней границы (Лонг в боковике)</option>
                             <option value="От верхней границы">📉 От верхней границы (Шорт в боковике)</option>
+                            <option value="Другое">🧩 Индивидуально / Сложная</option>
                         </select>
                     </div>
                     <div class="col-12">
@@ -189,7 +201,16 @@
 
     async function loadPlaybook() {
         const res = await fetch(API_BASE + 'playbook/');
-        const data = await res.json();
+        let data = await res.json();
+
+        // 👇 1. ЛОГИКА ПОИСКА (Частичное совпадение) 👇
+        const searchQ = document.getElementById('pb-search')?.value.toLowerCase().trim();
+        if (searchQ) {
+            data = data.filter(p =>
+                (p.title || '').toLowerCase().includes(searchQ) ||
+                (p.description || '').toLowerCase().includes(searchQ)
+            );
+        }
 
         const containers = {
             'Лонговый_По тренду': document.getElementById('pb-long-trend'),
@@ -197,22 +218,30 @@
             'Шортовый_По тренду': document.getElementById('pb-short-trend'),
             'Шортовый_Разворот': document.getElementById('pb-short-rev'),
             'Боковик_От нижней границы': document.getElementById('pb-range-long'),
-            'Боковик_От верхней границы': document.getElementById('pb-range-short')
+            'Боковик_От верхней границы': document.getElementById('pb-range-short'),
+            'OTHER': document.getElementById('pb-other') // 👈 Наш новый блок
         };
 
-        for (let key in containers) containers[key].innerHTML = '';
+        for (let key in containers) {
+            if (containers[key]) containers[key].innerHTML = '';
+        }
 
         data.forEach(p => {
-            const key = `${p.market_trend}_${p.entry_logic}`;
-            const container = containers[key];
+            let key = `${p.market_trend}_${p.entry_logic}`;
+            // Если сетап не подходит под жесткие 6 рамок, отправляем его в OTHER
+            let container = containers[key] || containers['OTHER'];
+
             if (container) {
+                // Если мы кладем в OTHER, то делаем карточки чуть уже (col-md-3), чтобы влезло больше в ряд
+                let colClass = (container === containers['OTHER']) ? 'col-md-3' : 'col-md-6';
+
                 container.innerHTML += `
-                    <div class="col-md-6">
+                    <div class="${colClass}">
                         <div class="card bg-black border-secondary h-100 shadow-sm">
                             <img src="${p.image_url}" class="card-img-top" style="height: 140px; object-fit: cover; cursor: pointer;" onclick="window.open('${p.image_url}')">
                             <div class="card-body p-2 position-relative">
                                 <h6 class="text-light mb-1 small fw-bold">${p.title}</h6>
-                                <p class="text-muted small mb-0" style="font-size: 0.75rem;">${p.description}</p>
+                                <p class="text-muted small mb-0 pb-3" style="font-size: 0.75rem; white-space: pre-wrap;">${p.description}</p>
                                 <button class="btn btn-sm btn-outline-danger position-absolute bottom-0 end-0 m-1 py-0 px-1" title="Удалить" onclick="deletePlaybook(${p.id})">🗑️</button>
                             </div>
                         </div>
@@ -222,8 +251,8 @@
         });
 
         for (let key in containers) {
-            if (containers[key].innerHTML.trim() === '') {
-                containers[key].innerHTML = '<div class="text-center text-muted small w-100 mt-4">Пока пусто. Добавь идеальный пример!</div>';
+            if (containers[key] && containers[key].innerHTML.trim() === '') {
+                containers[key].innerHTML = '<div class="text-center text-muted small w-100 mt-4">Пока пусто.</div>';
             }
         }
     }
@@ -350,11 +379,22 @@
 
     async function deletePlaybook(id) {
         if(confirm('Удалить этот сетап из Playbook?')) {
-            await fetch(API_BASE + `playbook/${id}/`, {
+            const res = await fetch(API_BASE + `playbook/${id}/`, {
                 method: 'DELETE',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: {
+                    // 👇 БРОНЕБОЙНЫЙ ВАРИАНТ: берем токен прямо из шаблонизатора Django
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
             });
-            await loadPlaybook();
+
+            if (res.ok) {
+                await loadPlaybook();
+            } else {
+                alert("Ошибка удаления! Сервер ответил 403. Обязательно нажми Ctrl + F5 для сброса кэша!");
+                console.error("Детали:", await res.text());
+            }
         }
     }
 

@@ -14,6 +14,8 @@
 {% endblock %}
 
 {% block content %}
+<div style="display: none;">{% csrf_token %}</div>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <button class="btn btn-outline-warning fw-bold me-2" onclick="new bootstrap.Modal(document.getElementById('manualTradeModal')).show()">➕ Чужая сделка</button>
     <h4 class="text-light">📥 Необработанные сделки (Inbox)</h4>
@@ -383,10 +385,15 @@
         let checkboxes = document.querySelectorAll('.trade-checkbox');
         for(let i=0; i<checkboxes.length; i++) checkboxes[i].checked = source.checked;
     }
-
     async function markAsProcessedSingle(id) {
-        const fd = new FormData(); fd.append('is_processed', 'true');
-        await fetch(`${API_BASE}trades/${id}/`, { method: 'PATCH', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+        const fd = new FormData();
+        fd.append('is_processed', 'true');
+        await fetch(`${API_BASE}trades/${id}/`, {
+            method: 'PATCH',
+            body: fd,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin' // 👈 ЗАЩИТА ОТ 403
+        });
         initPage();
     }
 
@@ -412,7 +419,11 @@
         try {
             const res = await fetch(API_BASE + 'trades/bulk_process/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                credentials: 'same-origin', // 👈 ЗАЩИТА ОТ 403
                 body: JSON.stringify(payload)
             });
 
@@ -441,7 +452,8 @@
         if (confirm(`Точно удалить сделку #${ticket} навсегда?`)) {
             const res = await fetch(`${API_BASE}trades/${id}/`, {
                 method: 'DELETE',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                credentials: 'same-origin' // 👈 ЗАЩИТА ОТ 403
             });
             if (res.ok) initPage();
         }
@@ -552,28 +564,42 @@
 
         if (!payload.date) return alert("Укажи дату сделки!");
 
-        const btn = event.target; const origText = btn.innerText;
-        btn.disabled = true; btn.innerText = "Создание...";
+        // 👇 БРОНЕБОЙНЫЙ ПОИСК ТОКЕНА 👇
+        let csrfToken = getCookie('csrftoken');
+        const tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (tokenElement) {
+            csrfToken = tokenElement.value;
+        }
+
+        const btn = event.target;
+        const origText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Создание...";
 
         try {
+            // 👇 ТУТ ИСПРАВЛЕНЫ КАВЫЧКИ 👇
             const res = await fetch(`${API_BASE}trades/add_manual/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin', // 👈 ИМЕННО ЭТО УБИВАЕТ ОШИБКУ 403
                 body: JSON.stringify(payload)
             });
 
-            btn.disabled = false; btn.innerText = origText;
+            btn.disabled = false;
+            btn.innerText = origText;
+
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
 
-                // 👇 АВТО-ФИЛЬТРАЦИЯ ПО ДАТЕ НОВОЙ СДЕЛКИ 👇
+                // Авто-фильтрация по дате новой сделки
                 const tradeDate = document.getElementById('man-date').value;
-
-                // Записываем дату сделки в фильтры "От" и "До"
                 localStorage.setItem('inbox_d_from', tradeDate);
                 localStorage.setItem('inbox_d_to', tradeDate);
 
-                // Сбрасываем остальные фильтры, чтобы сделка 100% отобразилась в таблице
+                // Сбрасываем остальные фильтры
                 localStorage.setItem('inbox_type', '');
                 localStorage.setItem('shared_sym', '');
                 localStorage.setItem('shared_mag', '');
@@ -581,16 +607,19 @@
                 localStorage.setItem('inbox_c_from', '');
                 localStorage.setItem('inbox_c_to', '');
 
-                // Очищаем поле ввода модалки для следующего раза
                 document.getElementById('man-date').value = '';
-
-                // Перезагружаем страницу с новыми фильтрами
                 initPage();
             } else {
-                const err = await res.json(); alert("Ошибка: " + (err.error || "Неизвестная ошибка"));
+                const errText = await res.text();
+                // 👇 ТУТ ТОЖЕ ИСПРАВЛЕНЫ КАВЫЧКИ 👇
+                alert(`Ошибка сервера: ${errText}`);
+                console.error(errText);
             }
         } catch (e) {
-            btn.disabled = false; btn.innerText = origText; alert("Ошибка сети");
+            btn.disabled = false;
+            btn.innerText = origText;
+            alert("Ошибка сети");
+            console.error(e);
         }
     }
 </script>

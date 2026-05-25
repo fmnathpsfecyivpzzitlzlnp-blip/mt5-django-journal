@@ -13,10 +13,7 @@
         .profit-negative { color: #ff5252 !important; }
         .nav-tabs .nav-link { color: #aaa; border: none; }
         .nav-tabs .nav-link.active { background-color: transparent; color: #00e676; border-bottom: 3px solid #00e676; }
-        .heatmap-box { width: 22px; height: 22px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-        .heatmap-box:hover { transform: scale(1.2); border: 1px solid #fff; }
         #auth-screen { height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .trade-details { max-width: 250px; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -36,8 +33,8 @@
                 </div>
                 <div class="tab-pane fade" id="register-tab">
                     <form onsubmit="event.preventDefault(); registerAccount();">
-                        <div class="mb-2"><input type="text" id="reg-user" class="form-control bg-dark text-light border-secondary" placeholder="Придумайте Логин" autocomplete="username"></div>
-                        <div class="mb-3"><input type="password" id="reg-pass" class="form-control bg-dark text-light border-secondary" placeholder="Придумайте Пароль" autocomplete="new-password"></div>
+                        <div class="mb-2"><input type="text" id="reg-user" aria-label="Логин" class="form-control bg-dark text-light border-secondary" placeholder="Придумайте Логин" autocomplete="username"></div>
+                        <div class="mb-3"><input type="password" id="reg-pass" aria-label="Пароль" class="form-control bg-dark text-light border-secondary" placeholder="Придумайте Пароль" autocomplete="new-password"></div>
                         <button type="submit" class="btn btn-primary w-100 fw-bold py-2">ЗАРЕГИСТРИРОВАТЬСЯ</button>
                     </form>
                 </div>
@@ -51,7 +48,7 @@
                 <a class="navbar-brand text-success fw-bold" href="/">XAUUSD | PRO</a>
                 <div class="collapse navbar-collapse">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item"><a class="nav-link text-light" href="{% url 'backtest' %}" >🧪 Бэктест</a></li>
+                        <li class="nav-item"><a class="nav-link text-light" href="{% url 'backtest' %}">🧪 Бэктест</a></li>
                         <li class="nav-item"><a class="nav-link text-light" href="/">📥 Входящие <span id="badge-inbox" class="badge bg-danger ms-1" style="display:none;">0</span></a></li>
                         <li class="nav-item"><a class="nav-link text-light" href="/journal/">📖 Дневник <span id="badge-journal" class="badge bg-primary ms-1" style="display:none;">0</span></a></li>
                         <li class="nav-item"><a class="nav-link text-light" href="/analytics/">📊 Аналитика</a></li>
@@ -67,11 +64,14 @@
                 </div>
             </div>
         </nav>
-        <div class="container-fluid px-4">  {% block content %}{% endblock %}
+
+        <div class="container-fluid px-4">
+            {% block content %}{% endblock %}
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
+    <script>
         const API_BASE = '/api/';
 
         function redirectToLogin() { window.location.href = '/api-auth/login/?next=/'; }
@@ -142,9 +142,6 @@
         }
 
         function getCookie(name) {
-            // 👇 ДОБАВИТЬ ЭТУ СТРОЧКУ 👇
-            if (name === 'csrftoken') name = 'diary_csrftoken';
-
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
                 const cookies = document.cookie.split(';');
@@ -159,8 +156,48 @@
             return cookieValue;
         }
 
+        // 👇=== ГЛОБАЛЬНАЯ ТАБЛЕТКА ОТ ОШИБКИ 403 ===👇
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            let [resource, config] = args;
+
+            // Проверяем, что запрос идет к нашему API
+            if (typeof resource === 'string' && resource.includes('/api/')) {
+                config = config || {};
+
+                // 🔥 1. АВТОМАТИЧЕСКИ пропускаем сессию (решает 90% проблем с 403)
+                config.credentials = 'same-origin';
+
+                // 🔥 2. АВТОМАТИЧЕСКИ подшиваем CSRF-токен для всех изменяющих запросов
+                const method = (config.method || 'GET').toUpperCase();
+                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    config.headers = config.headers || {};
+
+                    // Достаем токен (сначала из куки, если нет - из скрытого инпута Django)
+                    let token = getCookie('csrftoken');
+                    const tokenEl = document.querySelector('[name=csrfmiddlewaretoken]');
+                    if (!token && tokenEl) token = tokenEl.value;
+
+                    // Умная вставка заголовка
+                    if (config.headers instanceof Headers) {
+                        if (!config.headers.has('X-CSRFToken') && token) {
+                            config.headers.append('X-CSRFToken', token);
+                        }
+                    } else {
+                        if (!config.headers['X-CSRFToken'] && token) {
+                            config.headers['X-CSRFToken'] = token;
+                        }
+                    }
+                }
+                args[1] = config;
+            }
+            // Отправляем оригинальный запрос, но уже с добавленной "бронёй"
+            return originalFetch.apply(this, args);
+        };
+        // 👆=========================================👆
+
         document.addEventListener("DOMContentLoaded", checkAccess);
-    </script>
+ </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
