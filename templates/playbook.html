@@ -11,6 +11,7 @@
 {% endblock %}
 
 {% block content %}
+<div style="display: none;">{% csrf_token %}</div>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="text-light">📘 Мой Playbook</h4>
     <div class="d-flex gap-2 align-items-center">
@@ -113,7 +114,7 @@
                         <label class="text-secondary small mb-1">Название (Напр: Снятие BSL)</label>
                         <input type="text" id="pb-title" class="form-control bg-dark text-light border-secondary">
                     </div>
-                    
+
                     <div class="col-md-6">
                         <label class="text-secondary small mb-1">Скриншот эталона</label>
                         <div id="pb-dropzone" tabindex="0" class="smart-dropzone p-3 text-center rounded position-relative" style="border: 2px dashed #ffc107; outline: none; cursor: default; min-height: 100px;">
@@ -156,7 +157,7 @@
                 </div>
             </div>
             <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-warning w-100 fw-bold fs-6 py-2" onclick="uploadPlaybook()">Сохранить в матрицу</button>
+                <button type="button" class="btn btn-warning w-100 fw-bold fs-6 py-2" onclick="uploadPlaybook(event)">Сохранить в матрицу</button>
             </div>
         </div>
     </div>
@@ -179,7 +180,7 @@
                 <option value="warning">⚠️ Опасность (Когда уходить)</option>
             </select>
             <textarea id="new-rule-text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2" rows="2" placeholder="Напиши инсайт из своей торговли..."></textarea>
-            <button class="btn btn-info btn-sm w-100 fw-bold text-dark" onclick="addRule()">Сохранить правило</button>
+            <button class="btn btn-info btn-sm w-100 fw-bold text-dark" onclick="addRule(event)">Сохранить правило</button>
         </div>
     </div>
 </div>
@@ -187,85 +188,98 @@
 
 {% block scripts %}
 <script>
+    // В самом начале блока <script>
+    const CSRF_COOKIE_NAME = 'diary_csrftoken'; // 👈 Имя из настроек Django
+
+    // 1. УНИВЕРСАЛЬНЫЙ ПОЛУЧАТЕЛЬ ТОКЕНА (приоритет кукам, затем мета-тегу)
+    // В самом верху скрипта
+    function getFixedCsrfToken() {
+        // Django генерирует этот input при вызове {% csrf_token %}
+        const input = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (input && input.value) {
+            return input.value;
+        }
+
+        // Если по какой-то причине input не найден, ищем в куках (для подстраховки)
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.startsWith('diary_csrftoken=')) {
+                return cookie.substring('diary_csrftoken='.length);
+            }
+        }
+        return "";
+    }
+
+
+    console.log("Скрипт Playbook загружен!");
+    console.log("API_BASE:", typeof API_BASE !== 'undefined' ? API_BASE : "не найдено");
+    console.log("CSRF Token:", getFixedCsrfToken());
+
     let pbFile = null;
 
-    document.addEventListener("DOMContentLoaded", () => {
-        initPage();
-    });
-
-    async function initPage() {
-        await loadPlaybook();
+    function initPage() {
+        loadPlaybook();
         setupPbDropzone();
-        await loadRules();
+        loadRules();
     }
 
     async function loadPlaybook() {
-        const res = await fetch(API_BASE + 'playbook/');
-        let data = await res.json();
+        try {
+            const res = await fetch(API_BASE + 'playbook/');
+            let data = await res.json();
 
-        // 👇 1. ЛОГИКА ПОИСКА (Частичное совпадение) 👇
-        const searchQ = document.getElementById('pb-search')?.value.toLowerCase().trim();
-        if (searchQ) {
-            data = data.filter(p =>
-                (p.title || '').toLowerCase().includes(searchQ) ||
-                (p.description || '').toLowerCase().includes(searchQ)
-            );
-        }
+            const searchQ = document.getElementById('pb-search')?.value.toLowerCase().trim();
+            if (searchQ) {
+                data = data.filter(p => (p.title || '').toLowerCase().includes(searchQ) || (p.description || '').toLowerCase().includes(searchQ));
+            }
 
-        const containers = {
-            'Лонговый_По тренду': document.getElementById('pb-long-trend'),
-            'Лонговый_Разворот': document.getElementById('pb-long-rev'),
-            'Шортовый_По тренду': document.getElementById('pb-short-trend'),
-            'Шортовый_Разворот': document.getElementById('pb-short-rev'),
-            'Боковик_От нижней границы': document.getElementById('pb-range-long'),
-            'Боковик_От верхней границы': document.getElementById('pb-range-short'),
-            'OTHER': document.getElementById('pb-other') // 👈 Наш новый блок
-        };
+            const containers = {
+                'Лонговый_По тренду': document.getElementById('pb-long-trend'),
+                'Лонговый_Разворот': document.getElementById('pb-long-rev'),
+                'Шортовый_По тренду': document.getElementById('pb-short-trend'),
+                'Шортовый_Разворот': document.getElementById('pb-short-rev'),
+                'Боковик_От нижней границы': document.getElementById('pb-range-long'),
+                'Боковик_От верхней границы': document.getElementById('pb-range-short'),
+                'OTHER': document.getElementById('pb-other')
+            };
 
-        for (let key in containers) {
-            if (containers[key]) containers[key].innerHTML = '';
-        }
+            for (let key in containers) { if (containers[key]) containers[key].innerHTML = ''; }
 
-        data.forEach(p => {
-            let key = `${p.market_trend}_${p.entry_logic}`;
-            // Если сетап не подходит под жесткие 6 рамок, отправляем его в OTHER
-            let container = containers[key] || containers['OTHER'];
+            data.forEach(p => {
+                let key = `${p.market_trend}_${p.entry_logic}`;
+                let container = containers[key] || containers['OTHER'];
 
-            if (container) {
-                // Если мы кладем в OTHER, то делаем карточки чуть уже (col-md-3), чтобы влезло больше в ряд
-                let colClass = (container === containers['OTHER']) ? 'col-md-3' : 'col-md-6';
-
-                container.innerHTML += `
-                    <div class="${colClass}">
-                        <div class="card bg-black border-secondary h-100 shadow-sm">
-                            <img src="${p.image_url}" class="card-img-top" style="height: 140px; object-fit: cover; cursor: pointer;" onclick="window.open('${p.image_url}')">
-                            <div class="card-body p-2 position-relative">
-                                <h6 class="text-light mb-1 small fw-bold">${p.title}</h6>
-                                <p class="text-muted small mb-0 pb-3" style="font-size: 0.75rem; white-space: pre-wrap;">${p.description}</p>
-                                <button class="btn btn-sm btn-outline-danger position-absolute bottom-0 end-0 m-1 py-0 px-1" title="Удалить" onclick="deletePlaybook(${p.id})">🗑️</button>
+                if (container) {
+                    let colClass = (container === containers['OTHER']) ? 'col-md-3' : 'col-md-6';
+                    container.innerHTML += `
+                        <div class="${colClass}">
+                            <div class="card bg-black border-secondary h-100 shadow-sm">
+                                <img src="${p.image_url}" class="card-img-top" style="height: 140px; object-fit: cover; cursor: pointer;" onclick="window.open('${p.image_url}')">
+                                <div class="card-body p-2 position-relative">
+                                    <h6 class="text-light mb-1 small fw-bold">${p.title}</h6>
+                                    <p class="text-muted small mb-0 pb-3" style="font-size: 0.75rem; white-space: pre-wrap;">${p.description}</p>
+                                    <button class="btn btn-sm btn-outline-danger position-absolute bottom-0 end-0 m-1 py-0 px-1" title="Удалить" onclick="deletePlaybook(${p.id})">🗑️</button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                `;
-            }
-        });
+                        </div>`;
+                }
+            });
 
-        for (let key in containers) {
-            if (containers[key] && containers[key].innerHTML.trim() === '') {
-                containers[key].innerHTML = '<div class="text-center text-muted small w-100 mt-4">Пока пусто.</div>';
+            for (let key in containers) {
+                if (containers[key] && containers[key].innerHTML.trim() === '') {
+                    containers[key].innerHTML = '<div class="text-center text-muted small w-100 mt-4">Пока пусто.</div>';
+                }
             }
-        }
+        } catch(e) { console.error(e); }
     }
 
-    // 👇 ОБНОВЛЕННЫЙ ПАРСИНГ ССЫЛОК 👇
     function setupPbDropzone() {
         const dropzone = document.getElementById('pb-dropzone');
         const fileInput = document.getElementById('pb-file-input');
         const urlInput = document.getElementById('pb-url-input');
 
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) setPbPreview(e.target.files[0]);
-        });
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) setPbPreview(e.target.files[0]); });
 
         dropzone.addEventListener('paste', (e) => {
             e.preventDefault();
@@ -274,30 +288,18 @@
                 let item = items[index];
                 if (item.kind === 'file' && item.type.startsWith('image/')) {
                     setPbPreview(item.getAsFile());
-                    break; 
+                    break;
                 } else if (item.kind === 'string' && item.type === 'text/plain') {
                     item.getAsString(text => {
-                        if (text.includes('tradingview.com/x/')) { 
-                            urlInput.value = text; 
-                            setPbPreview(text); 
+                        if (text.includes('tradingview.com/x/')) {
+                            urlInput.value = text; setPbPreview(text);
                         }
                     });
                 }
             }
         });
 
-        urlInput.addEventListener('input', (e) => { 
-            if (e.target.value.includes('tradingview.com/x/')) setPbPreview(e.target.value); 
-        });
-
-        dropzone.addEventListener('focus', () => {
-            dropzone.style.borderColor = '#ffc107';
-            dropzone.style.backgroundColor = 'rgba(255, 193, 7, 0.1)';
-        });
-        dropzone.addEventListener('blur', () => {
-            dropzone.style.borderColor = '#ffc107'; 
-            dropzone.style.backgroundColor = 'transparent';
-        });
+        urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPbPreview(e.target.value); });
     }
 
     function setPbPreview(fileOrUrl) {
@@ -306,95 +308,92 @@
         const previewImg = document.getElementById('pb-preview-img');
         const dropText = document.getElementById('pb-drop-text');
 
-        if (typeof fileOrUrl === 'string') { 
-            previewImg.src = fileOrUrl; 
-            pbFile = null; 
-        } else { 
-            previewImg.src = URL.createObjectURL(fileOrUrl); 
-            pbFile = fileOrUrl; 
-            document.getElementById('pb-url-input').value = ''; 
-        }
+        if (typeof fileOrUrl === 'string') { previewImg.src = fileOrUrl; pbFile = null; }
+        else { previewImg.src = URL.createObjectURL(fileOrUrl); pbFile = fileOrUrl; document.getElementById('pb-url-input').value = ''; }
 
         previewContainer.classList.remove('d-none');
         dropText.classList.add('d-none');
     }
 
     function clearPbDropzone(event) {
-        if(event) event.stopPropagation(); 
-        pbFile = null; 
-        document.getElementById('pb-file-input').value = ''; 
-        document.getElementById('pb-url-input').value = ''; 
+        if(event) event.stopPropagation();
+        pbFile = null;
+        document.getElementById('pb-file-input').value = '';
+        document.getElementById('pb-url-input').value = '';
         document.getElementById('pb-preview-container').classList.add('d-none');
         document.getElementById('pb-drop-text').classList.remove('d-none');
         document.getElementById('pb-preview-img').src = '';
     }
 
-    async function uploadPlaybook() {
+    async function uploadPlaybook(event) {
         const fd = new FormData();
         const title = document.getElementById('pb-title').value;
-        const trend = document.getElementById('pb-trend').value;
-        const logic = document.getElementById('pb-logic').value;
-        const urlValue = document.getElementById('pb-url-input').value; // 👈 Берем ссылку
+        const urlValue = document.getElementById('pb-url-input').value;
 
         if (!title) return alert('Укажите название сетапа!');
+        if (!pbFile && !urlValue) return alert('Добавьте скриншот или ссылку!');
 
         fd.append('title', title);
         fd.append('description', document.getElementById('pb-desc').value);
-        fd.append('market_trend', trend);
-        fd.append('entry_logic', logic);
-
-        if (pbFile) {
-            fd.append('image', pbFile);
-        } else if (urlValue) {
-            fd.append('image_url', urlValue); // 👈 Отправляем ссылку на сервер
-        } else {
-            return alert('Пожалуйста, добавьте скриншот эталона из буфера или вставьте ссылку TradingView!');
-        }
+        fd.append('market_trend', document.getElementById('pb-trend').value);
+        fd.append('entry_logic', document.getElementById('pb-logic').value);
+        if (pbFile) fd.append('image', pbFile);
+        else if (urlValue) fd.append('image_url', urlValue);
 
         const btn = event.target;
         const originalText = btn.innerText;
         btn.disabled = true;
         btn.innerText = "Загрузка...";
 
-        const res = await fetch(API_BASE + 'playbook/', {
-            method: 'POST',
-            body: fd,
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            credentials: 'same-origin' // 👈 ДОБАВИТЬ ЭТУ СТРОКУ (защита от 403)
-        });
-
-        btn.disabled = false;
-        btn.innerText = originalText;
-
-        if (res.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('addPlaybookModal')).hide();
-            document.getElementById('pb-title').value = '';
-            document.getElementById('pb-desc').value = '';
-            clearPbDropzone(); 
-            await loadPlaybook();
-        } else {
-            alert('Ошибка при загрузке. Проверьте правильность ссылки.');
-        }
-    }
-
-    async function deletePlaybook(id) {
-        if(confirm('Удалить этот сетап из Playbook?')) {
-            const res = await fetch(API_BASE + `playbook/${id}/`, {
-                method: 'DELETE',
+        try {
+            const res = await fetch(API_BASE + 'playbook/', {
+                method: 'POST',
+                body: fd,
                 headers: {
-                    // 👇 БРОНЕБОЙНЫЙ ВАРИАНТ: берем токен прямо из шаблонизатора Django
-                    'X-CSRFToken': '{{ csrf_token }}',
-                    'Content-Type': 'application/json'
+                    // 👇 ИСПОЛЬЗУЕМ ПРОВЕРЕННЫЙ МЕТОД КАК В ДНЕВНИКЕ 👇
+                    'X-CSRFToken': getFixedCsrfToken() // 👈 Заменили getCookie
                 },
                 credentials: 'same-origin'
             });
 
+            btn.disabled = false;
+            btn.innerText = originalText;
+
             if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('addPlaybookModal')).hide();
+                document.getElementById('pb-title').value = '';
+                document.getElementById('pb-desc').value = '';
+                clearPbDropzone();
                 await loadPlaybook();
             } else {
-                alert("Ошибка удаления! Сервер ответил 403. Обязательно нажми Ctrl + F5 для сброса кэша!");
-                console.error("Детали:", await res.text());
+                const err = await res.text();
+                alert(`Ошибка сервера: ${err}`);
+                console.error("Детали ошибки:", err);
             }
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerText = originalText;
+            alert("Ошибка сети. Проверьте консоль.");
+            console.error(e);
+        }
+    }
+
+    function deletePlaybook(id) {
+        if(confirm('Удалить этот сетап из Playbook?')) {
+            const xhr = new XMLHttpRequest();
+            xhr.open('DELETE', API_BASE + `playbook/${id}/`, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('X-CSRFToken', getFixedCsrfToken()); // 👈 Заменили getCookie
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            xhr.onload = async function() {
+                if (xhr.status === 204 || xhr.status === 200) {
+                    await loadPlaybook();
+                } else {
+                    alert("Ошибка удаления! " + xhr.responseText);
+                }
+            };
+            xhr.send();
         }
     }
 
@@ -403,55 +402,33 @@
             const res = await fetch(API_BASE + 'rules/');
             if(!res.ok) return;
             const rules = await res.json();
-            
             const container = document.getElementById('rules-container');
-            
             let mantras = rules.filter(r => r.category === 'mantra');
             let golds = rules.filter(r => r.category === 'rule');
             let warnings = rules.filter(r => r.category === 'warning');
 
             let html = '';
-
             if (mantras.length > 0) {
-                html += `<div class="alert bg-black border-secondary text-light p-3 mb-4 shadow-sm">
-                    <h6 class="text-warning fw-bold mb-2">📜 Мантра перед открытием графика:</h6>
-                    <ul class="mb-0 text-muted ps-3 small">`;
-                mantras.forEach(r => {
-                    html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`;
-                });
+                html += `<div class="alert bg-black border-secondary text-light p-3 mb-4 shadow-sm"><h6 class="text-warning fw-bold mb-2">📜 Мантра перед открытием графика:</h6><ul class="mb-0 text-muted ps-3 small">`;
+                mantras.forEach(r => { html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`; });
                 html += `</ul></div>`;
             }
-
             if (golds.length > 0) {
-                html += `<h6 class="text-success fw-bold border-bottom border-success pb-1 mt-4">💎 Золотые правила дисциплины</h6>
-                <ul class="text-muted ps-3 mb-4">`;
-                golds.forEach(r => {
-                    html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`;
-                });
+                html += `<h6 class="text-success fw-bold border-bottom border-success pb-1 mt-4">💎 Золотые правила дисциплины</h6><ul class="text-muted ps-3 mb-4">`;
+                golds.forEach(r => { html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`; });
                 html += `</ul>`;
             }
-
             if (warnings.length > 0) {
-                html += `<h6 class="text-danger fw-bold border-bottom border-danger pb-1 mt-4">⚠️ Признаки того, что пора уходить:</h6>
-                <div class="alert bg-danger bg-opacity-10 border-danger text-light p-3 mb-2 small">
-                    <ul class="mb-0 ps-3">`;
-                warnings.forEach(r => {
-                    html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`;
-                });
+                html += `<h6 class="text-danger fw-bold border-bottom border-danger pb-1 mt-4">⚠️ Признаки того, что пора уходить:</h6><div class="alert bg-danger bg-opacity-10 border-danger text-light p-3 mb-2 small"><ul class="mb-0 ps-3">`;
+                warnings.forEach(r => { html += `<li class="mb-2">${r.text} <span class="badge bg-danger ms-1" style="cursor:pointer; font-size: 0.6rem;" onclick="deleteRule(${r.id})" title="Удалить">✖</span></li>`; });
                 html += `</ul></div>`;
             }
-
-            if(rules.length === 0) {
-                html = '<div class="text-center text-muted mt-5 pt-5 small">Здесь пока пусто.<br>Добавь свои первые торговые установки внизу! 👇</div>';
-            }
-
+            if(rules.length === 0) html = '<div class="text-center text-muted mt-5 pt-5 small">Здесь пока пусто.<br>Добавь свои первые торговые установки внизу! 👇</div>';
             container.innerHTML = html;
-        } catch (e) {
-            console.error("Ошибка API: убедись что миграции БД выполнены", e);
-        }
+        } catch (e) { console.error("Ошибка загрузки правил", e); }
     }
 
-    async function addRule() {
+    async function addRule(event) {
         const cat = document.getElementById('new-rule-cat').value;
         const text = document.getElementById('new-rule-text').value.trim();
         if(!text) return alert("Введите текст правила!");
@@ -462,15 +439,17 @@
         try {
             const res = await fetch(API_BASE + 'rules/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 👇 ИСПОЛЬЗУЕМ ПРОВЕРЕННЫЙ МЕТОД 👇
+                    'X-CSRFToken': getFixedCsrfToken() // 👈 Заменили getCookie
+                },
                 body: JSON.stringify({ category: cat, text: text })
             });
-            
             btn.disabled = false;
-
             if(res.ok) {
                 document.getElementById('new-rule-text').value = '';
-                loadRules(); 
+                loadRules();
             } else {
                 alert("Ошибка сохранения");
             }
@@ -481,51 +460,15 @@
 
     async function deleteRule(id) {
         if(confirm("Точно удалить это правило?")) {
-            await fetch(API_BASE + `rules/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') }});
-            loadRules(); 
+            await fetch(API_BASE + `rules/${id}/`, {
+                method: 'DELETE',
+                headers: {
+                    // 👇 ИСПОЛЬЗУЕМ ПРОВЕРЕННЫЙ МЕТОД 👇
+                    'X-CSRFToken': getFixedCsrfToken() // 👈 Заменили getCookie
+                }
+            });
+            loadRules();
         }
     }
 </script>
 {% endblock %}
-Шаг 2: Учим Бэкенд скачивать ссылку из TradingView (trades/views.py)
-Так как Плейбук хранит эталонные скриншоты прямо на твоем сервере (в ImageField), нам нужно, чтобы при отправке ссылки сервер сам заходил на TradingView, скачивал картинку и сохранял её в карточку.
-
-Открой файл trades/views.py, найди класс PlaybookViewSet и полностью замени его функцию create на эту мощную версию:
-
-Python
-    def create(self, request):
-        try:
-            image_file = request.FILES.get('image')
-            image_url = request.data.get('image_url')
-
-            # 👇 ЕСЛИ ПРИСЛАЛИ ССЫЛКУ TRADINGVIEW - СКАЧИВАЕМ ЕЁ! 👇
-            if image_url and not image_file:
-                import requests
-                from django.core.files.base import ContentFile
-                import random
-                
-                # Скачиваем картинку по ссылке
-                resp = requests.get(image_url)
-                if resp.status_code == 200:
-                    # Генерируем уникальное имя файла и превращаем в файл для Django
-                    file_name = f"tv_playbook_{random.randint(1000, 9999)}.png"
-                    image_file = ContentFile(resp.content, name=file_name)
-                else:
-                    return Response({"error": "Не удалось скачать картинку по ссылке TradingView."}, status=400)
-
-            if not image_file:
-                return Response({"error": "Нет ни файла, ни рабочей ссылки."}, status=400)
-
-            # Создаем карточку Плейбука
-            p = PlaybookPattern.objects.create(
-                user=request.user,
-                title=request.data.get('title'),
-                description=request.data.get('description', ''),
-                market_trend=request.data.get('market_trend', 'Лонговый'),
-                entry_logic=request.data.get('entry_logic', 'По тренду'),
-                ideal_screenshot=image_file
-            )
-            return Response({"status": "Успешно добавлено!"})
-            
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)

@@ -25,7 +25,14 @@ SECRET_KEY = 'django-insecure-2@x#t4x&2b^s80eqh^#-gz^14k@z&k2!)&n$2o)20-tmlzs1*m
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['diary.local', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['diary.local', 'localhost', '127.0.0.1', '*']
+
+# 👇 ДОБАВЬ ЭТОТ БЛОК СРАЗУ ПОД ALLOWED_HOSTS 👇
+CSRF_TRUSTED_ORIGINS = [
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
+    'http://diary.local:8000',
+]
 
 
 # Application definition
@@ -48,7 +55,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    #'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -140,3 +147,10 @@ SESSION_COOKIE_AGE = 2592000
 
 SESSION_COOKIE_NAME = 'diary_sessionid'
 CSRF_COOKIE_NAME = 'diary_csrftoken'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'trades.authentication.CsrfExemptSessionAuthentication',  # 👈 Изменили путь здесь
+        'rest_framework.authentication.BasicAuthentication',
+    ),
+}

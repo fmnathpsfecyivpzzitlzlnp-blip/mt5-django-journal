@@ -10,6 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.shortcuts import render
 from rest_framework import viewsets, serializers, permissions, status
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -44,9 +45,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from xhtml2pdf.default import DEFAULT_FONT # 👈 Вот секретный ключ!
 from rest_framework import filters
 
-
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
-
 
 
 @api_view(['POST'])
@@ -65,9 +64,14 @@ def register_user(request):
 class PlaybookSerializer(serializers.ModelSerializer):
     class Meta: model = PlaybookPattern; fields = '__all__'
 
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # 👈 Бронебойное отключение CSRF-защиты
 
 class PlaybookViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]  # 👈 ДОБАВИТЬ ЭТУ СТРОК
+    authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
 
     def list(self, request):
         patterns = PlaybookPattern.objects.filter(user=request.user).order_by('-created_at')

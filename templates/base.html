@@ -71,76 +71,13 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
+        // Глобальные переменные API и Токен
         const API_BASE = '/api/';
+        window.CSRF_TOKEN = "{{ csrf_token }}";
 
-        function redirectToLogin() { window.location.href = '/api-auth/login/?next=/'; }
-
-        async function logout() {
-            await fetch('/api-auth/logout/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
-            });
-            window.location.href = '/api-auth/login/?next=/';
-        }
-
-        async function registerAccount() {
-            const u = document.getElementById('reg-user').value;
-            const p = document.getElementById('reg-pass').value;
-            const res = await fetch(API_BASE + 'register/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: u, password: p })
-            });
-            const data = await res.json();
-            if(res.ok) {
-                alert(data.message);
-                document.querySelector('[data-bs-target="#login-tab"]').click();
-            } else {
-                alert(data.error);
-            }
-        }
-
-        async function updateNavBadges() {
-            try {
-                const res = await fetch(API_BASE + 'trades/stats/');
-                if(!res.ok) return;
-
-                const data = await res.json();
-                if (data.overview) {
-                    const bInbox = document.getElementById('badge-inbox');
-                    const bJournal = document.getElementById('badge-journal');
-
-                    if(data.overview.inbox_count > 0) {
-                        bInbox.innerText = data.overview.inbox_count;
-                        bInbox.style.display = 'inline-block';
-                    } else {
-                        bInbox.style.display = 'none';
-                    }
-
-                    bJournal.innerText = data.overview.journal_count;
-                    bJournal.style.display = 'inline-block';
-                }
-            } catch(e) {}
-        }
-
-        async function checkAccess() {
-            try {
-                const res = await fetch(API_BASE + 'trades/stats/');
-                if (res.status === 403 || res.status === 401) {
-                    document.getElementById('auth-screen').style.display = 'flex';
-                    document.getElementById('app-content').style.display = 'none';
-                } else {
-                    document.getElementById('auth-screen').style.display = 'none';
-                    document.getElementById('app-content').style.display = 'block';
-                    updateNavBadges();
-                    if(typeof initPage === 'function') initPage();
-                }
-            } catch (e) {
-                document.getElementById('auth-screen').style.display = 'flex';
-            }
-        }
-
+        // Единственно верная функция getCookie
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -156,48 +93,29 @@
             return cookieValue;
         }
 
-        // 👇=== ГЛОБАЛЬНАЯ ТАБЛЕТКА ОТ ОШИБКИ 403 ===👇
-        const originalFetch = window.fetch;
-        window.fetch = async function(...args) {
-            let [resource, config] = args;
-
-            // Проверяем, что запрос идет к нашему API
-            if (typeof resource === 'string' && resource.includes('/api/')) {
-                config = config || {};
-
-                // 🔥 1. АВТОМАТИЧЕСКИ пропускаем сессию (решает 90% проблем с 403)
-                config.credentials = 'same-origin';
-
-                // 🔥 2. АВТОМАТИЧЕСКИ подшиваем CSRF-токен для всех изменяющих запросов
-                const method = (config.method || 'GET').toUpperCase();
-                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-                    config.headers = config.headers || {};
-
-                    // Достаем токен (сначала из куки, если нет - из скрытого инпута Django)
-                    let token = getCookie('csrftoken');
-                    const tokenEl = document.querySelector('[name=csrfmiddlewaretoken]');
-                    if (!token && tokenEl) token = tokenEl.value;
-
-                    // Умная вставка заголовка
-                    if (config.headers instanceof Headers) {
-                        if (!config.headers.has('X-CSRFToken') && token) {
-                            config.headers.append('X-CSRFToken', token);
-                        }
-                    } else {
-                        if (!config.headers['X-CSRFToken'] && token) {
-                            config.headers['X-CSRFToken'] = token;
-                        }
-                    }
+        async function checkAccess() {
+            try {
+                const res = await fetch(API_BASE + 'trades/stats/');
+                if (res.status === 403 || res.status === 401) {
+                    document.getElementById('auth-screen').style.display = 'flex';
+                    document.getElementById('app-content').style.display = 'none';
+                } else {
+                    document.getElementById('auth-screen').style.display = 'none';
+                    document.getElementById('app-content').style.display = 'block';
+                    if(typeof initPage === 'function') initPage();
                 }
-                args[1] = config;
-            }
-            // Отправляем оригинальный запрос, но уже с добавленной "бронёй"
-            return originalFetch.apply(this, args);
-        };
-        // 👆=========================================👆
+            } catch (e) { document.getElementById('auth-screen').style.display = 'flex'; }
+        }
+
+        function redirectToLogin() { window.location.href = '/api-auth/login/?next=/'; }
+        async function logout() {
+            await fetch('/api-auth/logout/', { method: 'POST', headers: { 'X-CSRFToken': window.CSRF_TOKEN }});
+            window.location.href = '/api-auth/login/?next=/';
+        }
 
         document.addEventListener("DOMContentLoaded", checkAccess);
- </script>
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
