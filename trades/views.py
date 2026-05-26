@@ -44,6 +44,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from xhtml2pdf.default import DEFAULT_FONT # 👈 Вот секретный ключ!
 from rest_framework import filters
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
 
@@ -68,6 +70,7 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         return  # 👈 Бронебойное отключение CSRF-защиты
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PlaybookViewSet(viewsets.ViewSet):
     authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
     permission_classes = [permissions.IsAuthenticated]

@@ -349,10 +349,7 @@
             const res = await fetch(API_BASE + 'playbook/', {
                 method: 'POST',
                 body: fd,
-                headers: {
-                    // 👇 ИСПОЛЬЗУЕМ ПРОВЕРЕННЫЙ МЕТОД КАК В ДНЕВНИКЕ 👇
-                    'X-CSRFToken': getFixedCsrfToken() // 👈 Заменили getCookie
-                },
+                // Headers больше не нужны
                 credentials: 'same-origin'
             });
 
@@ -383,7 +380,7 @@
             const xhr = new XMLHttpRequest();
             xhr.open('DELETE', API_BASE + `playbook/${id}/`, true);
             xhr.withCredentials = true;
-            xhr.setRequestHeader('X-CSRFToken', getFixedCsrfToken()); // 👈 Заменили getCookie
+
             xhr.setRequestHeader('Content-Type', 'application/json');
 
             xhr.onload = async function() {
