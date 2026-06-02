@@ -27,4 +27,7 @@ urlpatterns = [
 
     # 2. Путь для сохранения и загрузки данных (API)
     path('api/backtest/', views.backtest_grid_api),
+
+    path('forecast/', views.forecast_page, name='forecast'),
+    path('api/kronos_forecast/', views.get_kronos_forecast, name='api_kronos_forecast'),
 ]

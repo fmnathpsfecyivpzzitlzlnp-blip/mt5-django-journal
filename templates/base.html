@@ -48,7 +48,8 @@
                 <a class="navbar-brand text-success fw-bold" href="/">XAUUSD | PRO</a>
                 <div class="collapse navbar-collapse">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item"><a class="nav-link text-light" href="{% url 'backtest' %}">🧪 Бэктест</a></li>
+                        <li class="nav-item"><a class="nav-link text-light" href="{% url 'backtest' %}" >🧪 Бэктест</a></li>
+                        <li class="nav-item"><a class="nav-link text-warning fw-bold" href="/api/forecast/">🔮 ИИ Прогноз</a></li>
                         <li class="nav-item"><a class="nav-link text-light" href="/">📥 Входящие <span id="badge-inbox" class="badge bg-danger ms-1" style="display:none;">0</span></a></li>
                         <li class="nav-item"><a class="nav-link text-light" href="/journal/">📖 Дневник <span id="badge-journal" class="badge bg-primary ms-1" style="display:none;">0</span></a></li>
                         <li class="nav-item"><a class="nav-link text-light" href="/analytics/">📊 Аналитика</a></li>
@@ -56,6 +57,7 @@
                         <li class="nav-item"><a href="/playbook/" class="nav-link text-light fs-5">📘 Playbook</a></li>
                         <li class="nav-item"><a class="nav-link {% if request.path == '/faq/' %}active{% endif %}" href="{% url 'faq' %}">📚 База Знаний</a></li>
                         <li class="nav-item"><a class="nav-link text-info" href="/guide/">🗺️ Руководство</a></li>
+
                     </ul>
                     <div class="d-flex gap-2">
                         <a href="/profile/" class="btn btn-sm btn-outline-light px-3">⚙️ Профиль</a>

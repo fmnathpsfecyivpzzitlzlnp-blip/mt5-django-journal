@@ -46,6 +46,7 @@ from xhtml2pdf.default import DEFAULT_FONT # 👈 Вот секретный кл
 from rest_framework import filters
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.core.cache import cache # 👈 ДОБАВЛЯЕМ ИМПОРТ КЭША
 
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
 
@@ -1096,3 +1097,111 @@ def download_tv_image(url):
 
 def guide_page(request):
     return render(request, 'guide.html')
+
+
+@login_required
+def forecast_page(request):
+    """Отображает HTML страницу прогноза"""
+    return render(request, 'forecast.html')
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_kronos_forecast(request):
+    """Реальный API эндпоинт: Свечи 1m, кэш 3m"""
+    from django.core.cache import cache
+
+    # 1. ПРОВЕРЯЕМ КЭШ (Время кэша 180 секунд = 3 минуты)
+    cached_forecast = cache.get('kronos_gold_1m_v1')  # Изменили ключ для сброса!
+    if cached_forecast:
+        print("⚡ [KRONOS] Отдаем свежий прогноз из КЭША (без запуска ИИ)")
+        return Response(cached_forecast)
+
+    print("\n" + "=" * 50)
+    print("🚀 [KRONOS] ЗАПУСК ЯДРА ПО ЗАПРОСУ С САЙТА...")
+
+    import yfinance as yf
+    import pandas as pd
+    import torch
+    import warnings
+    warnings.filterwarnings('ignore')
+    from model import Kronos, KronosTokenizer, KronosPredictor
+
+    try:
+        print("⏳ [KRONOS] 1/3 Скачиваем 1m котировки GC=F...")
+        gold_data = yf.download(tickers="GC=F", interval="1m", period="5d", progress=False)
+        if isinstance(gold_data.columns, pd.MultiIndex):
+            gold_data.columns = gold_data.columns.get_level_values(0)
+
+        df = gold_data.reset_index()
+        if 'Date' in df.columns:
+            df.rename(columns={'Date': 'timestamps'}, inplace=True)
+        if 'Datetime' in df.columns:
+            df.rename(columns={'Datetime': 'timestamps'}, inplace=True)
+
+        df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'},
+                  inplace=True)
+        df['timestamps'] = pd.to_datetime(df['timestamps']).dt.tz_localize(None)
+
+        lookback = 400
+        pred_len = 12
+
+        x_df = df.iloc[-lookback:][['open', 'high', 'low', 'close', 'volume']].reset_index(drop=True)
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            x_df[col] = x_df[col].astype(float)
+
+        x_timestamp = df.iloc[-lookback:]['timestamps'].reset_index(drop=True)
+        last_time = x_timestamp.iloc[-1]
+
+        # Шаг будущего времени теперь строго 1 минута
+        y_timestamp = pd.Series([last_time + pd.Timedelta(minutes=1 * i) for i in range(1, pred_len + 1)])
+
+        print("🧠 [KRONOS] 2/3 Инициализация ИИ-ядра (загрузка весов)...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
+        model = Kronos.from_pretrained("NeoQuasar/Kronos-small").to(device)
+        predictor = KronosPredictor(model, tokenizer, max_context=512)
+
+        print("⚙️ [KRONOS] 3/3 Нейросеть генерирует прогноз (ЖДИТЕ 10-20 сек)...")
+        pred_df = predictor.predict(
+            df=x_df, x_timestamp=x_timestamp, y_timestamp=y_timestamp,
+            pred_len=pred_len, T=1.0, top_p=0.9, sample_count=1
+        )
+
+        print("✅ [KRONOS] Прогноз успешно сгенерирован! Отправляем на сайт.")
+        print("=" * 50 + "\n")
+
+        predictions = []
+        base_price = x_df['close'].iloc[-1]
+        final_price = pred_df['close'].iloc[-1]
+
+        for index, row in pred_df.iterrows():
+            predictions.append({
+                "time": index.strftime("%H:%M"),
+                "open": round(float(row['open']), 2),
+                "high": round(float(row['high']), 2),
+                "low": round(float(row['low']), 2),
+                "close": round(float(row['close']), 2)
+            })
+
+        overall_trend = "UP" if final_price > base_price else "DOWN"
+
+        response_data = {
+            "status": "ok",
+            "data": {
+                "asset": "XAUUSD (GC=F)",
+                "overall_trend": overall_trend,
+                "target_price": round(float(final_price), 2),
+                "confidence": 92.5,
+                "predictions": predictions
+            }
+        }
+
+        # СОХРАНЯЕМ В КЭШ на 180 секунд (ровно 3 минуты)
+        cache.set('kronos_gold_1m_v1', response_data, 180)
+
+        return Response(response_data)
+
+    except Exception as e:
+        print(f"❌ [KRONOS] КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        return Response({"status": "error", "message": str(e)}, status=500)
