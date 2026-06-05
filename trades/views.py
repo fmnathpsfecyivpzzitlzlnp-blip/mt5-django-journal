@@ -1108,17 +1108,17 @@ def forecast_page(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_kronos_forecast(request):
-    """Реальный API эндпоинт: Свечи 1m, кэш 3m"""
+    """Мульти-Таймфрейм API (1m, 5m, 15m, 1H) - 15 свечей"""
     from django.core.cache import cache
 
-    # 1. ПРОВЕРЯЕМ КЭШ (Время кэша 180 секунд = 3 минуты)
-    cached_forecast = cache.get('kronos_gold_1m_v1')  # Изменили ключ для сброса!
+    # Сбрасываем кэш (v3)
+    cached_forecast = cache.get('kronos_mtf_v3')
     if cached_forecast:
-        print("⚡ [KRONOS] Отдаем свежий прогноз из КЭША (без запуска ИИ)")
+        print("⚡ [KRONOS] Отдаем MTF-сводку из КЭША")
         return Response(cached_forecast)
 
     print("\n" + "=" * 50)
-    print("🚀 [KRONOS] ЗАПУСК ЯДРА ПО ЗАПРОСУ С САЙТА...")
+    print("🚀 [KRONOS MTF] ЗАПУСК АНАЛИЗА (15 СВЕЧЕЙ)...")
 
     import yfinance as yf
     import pandas as pd
@@ -1128,80 +1128,98 @@ def get_kronos_forecast(request):
     from model import Kronos, KronosTokenizer, KronosPredictor
 
     try:
-        print("⏳ [KRONOS] 1/3 Скачиваем 1m котировки GC=F...")
-        gold_data = yf.download(tickers="GC=F", interval="1m", period="5d", progress=False)
-        if isinstance(gold_data.columns, pd.MultiIndex):
-            gold_data.columns = gold_data.columns.get_level_values(0)
-
-        df = gold_data.reset_index()
-        if 'Date' in df.columns:
-            df.rename(columns={'Date': 'timestamps'}, inplace=True)
-        if 'Datetime' in df.columns:
-            df.rename(columns={'Datetime': 'timestamps'}, inplace=True)
-
-        df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'},
-                  inplace=True)
-        df['timestamps'] = pd.to_datetime(df['timestamps']).dt.tz_localize(None)
-
-        lookback = 400
-        pred_len = 12
-
-        x_df = df.iloc[-lookback:][['open', 'high', 'low', 'close', 'volume']].reset_index(drop=True)
-        for col in ['open', 'high', 'low', 'close', 'volume']:
-            x_df[col] = x_df[col].astype(float)
-
-        x_timestamp = df.iloc[-lookback:]['timestamps'].reset_index(drop=True)
-        last_time = x_timestamp.iloc[-1]
-
-        # Шаг будущего времени теперь строго 1 минута
-        y_timestamp = pd.Series([last_time + pd.Timedelta(minutes=1 * i) for i in range(1, pred_len + 1)])
-
-        print("🧠 [KRONOS] 2/3 Инициализация ИИ-ядра (загрузка весов)...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
         model = Kronos.from_pretrained("NeoQuasar/Kronos-small").to(device)
         predictor = KronosPredictor(model, tokenizer, max_context=512)
 
-        print("⚙️ [KRONOS] 3/3 Нейросеть генерирует прогноз (ЖДИТЕ 10-20 сек)...")
-        pred_df = predictor.predict(
-            df=x_df, x_timestamp=x_timestamp, y_timestamp=y_timestamp,
-            pred_len=pred_len, T=1.0, top_p=0.9, sample_count=1
-        )
+        # 👇 УВЕЛИЧИЛИ ПРОГНОЗ ДО 15 СВЕЧЕЙ ДЛЯ ВСЕХ ТАЙМФРЕЙМОВ 👇
+        timeframes = {
+            '1m': {'yf_int': '1m', 'period': '5d', 'pred_len': 15, 'step_min': 1},
+            '5m': {'yf_int': '5m', 'period': '5d', 'pred_len': 15, 'step_min': 5},
+            '15m': {'yf_int': '15m', 'period': '1mo', 'pred_len': 15, 'step_min': 15},
+            '1H': {'yf_int': '60m', 'period': '1mo', 'pred_len': 15, 'step_min': 60},
+        }
 
-        print("✅ [KRONOS] Прогноз успешно сгенерирован! Отправляем на сайт.")
-        print("=" * 50 + "\n")
+        mtf_results = []
+        all_predictions = {}
 
-        predictions = []
-        base_price = x_df['close'].iloc[-1]
-        final_price = pred_df['close'].iloc[-1]
+        for tf, config in timeframes.items():
+            print(f"⏳ [KRONOS] Считаем таймфрейм {tf}...")
 
-        for index, row in pred_df.iterrows():
-            predictions.append({
-                "time": index.strftime("%H:%M"),
-                "open": round(float(row['open']), 2),
-                "high": round(float(row['high']), 2),
-                "low": round(float(row['low']), 2),
-                "close": round(float(row['close']), 2)
+            gold_data = yf.download(tickers="GC=F", interval=config['yf_int'], period=config['period'], progress=False)
+            if isinstance(gold_data.columns, pd.MultiIndex):
+                gold_data.columns = gold_data.columns.get_level_values(0)
+
+            df = gold_data.reset_index()
+            if 'Date' in df.columns: df.rename(columns={'Date': 'timestamps'}, inplace=True)
+            if 'Datetime' in df.columns: df.rename(columns={'Datetime': 'timestamps'}, inplace=True)
+            df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'},
+                      inplace=True)
+            df['timestamps'] = pd.to_datetime(df['timestamps']).dt.tz_localize(None)
+
+            lookback = min(400, len(df))
+            x_df = df.iloc[-lookback:][['open', 'high', 'low', 'close', 'volume']].reset_index(drop=True)
+            for col in ['open', 'high', 'low', 'close', 'volume']: x_df[col] = x_df[col].astype(float)
+
+            x_timestamp = df.iloc[-lookback:]['timestamps'].reset_index(drop=True)
+            last_time = x_timestamp.iloc[-1]
+            y_timestamp = pd.Series(
+                [last_time + pd.Timedelta(minutes=config['step_min'] * i) for i in range(1, config['pred_len'] + 1)])
+
+            pred_df = predictor.predict(df=x_df, x_timestamp=x_timestamp, y_timestamp=y_timestamp,
+                                        pred_len=config['pred_len'], T=1.0, top_p=0.9, sample_count=1)
+
+            base_price = float(x_df['close'].iloc[-1])
+            final_price = float(pred_df['close'].iloc[-1])
+            trend = "UP" if final_price > base_price else "DOWN"
+            delta = final_price - base_price
+
+            mtf_results.append({
+                "tf": tf,
+                "trend": trend,
+                "delta": round(delta, 2)
             })
 
-        overall_trend = "UP" if final_price > base_price else "DOWN"
+            tf_candles = []
+            for index, row in pred_df.iterrows():
+                tf_candles.append({
+                    "time": index.strftime("%H:%M"),
+                    "open": round(float(row['open']), 2),
+                    "high": round(float(row['high']), 2),
+                    "low": round(float(row['low']), 2),
+                    "close": round(float(row['close']), 2)
+                })
+
+            all_predictions[tf] = tf_candles
+
+        ups = sum(1 for r in mtf_results if r['trend'] == 'UP')
+        downs = sum(1 for r in mtf_results if r['trend'] == 'DOWN')
+
+        if ups == 4:
+            consensus = "🚀 СТРОНГ ЛОНГ (4/4)"
+        elif downs == 4:
+            consensus = "🩸 СТРОНГ ШОРТ (4/4)"
+        elif ups > downs:
+            consensus = f"📈 ПРЕОБЛАДАЕТ ЛОНГ ({ups}/4)"
+        elif downs > ups:
+            consensus = f"📉 ПРЕОБЛАДАЕТ ШОРТ ({downs}/4)"
+        else:
+            consensus = "⚔️ РАСКОРРЕЛЯЦИЯ (2/2)"
 
         response_data = {
             "status": "ok",
             "data": {
-                "asset": "XAUUSD (GC=F)",
-                "overall_trend": overall_trend,
-                "target_price": round(float(final_price), 2),
-                "confidence": 92.5,
-                "predictions": predictions
+                "consensus": consensus,
+                "mtf": mtf_results,
+                "predictions": all_predictions
             }
         }
 
-        # СОХРАНЯЕМ В КЭШ на 180 секунд (ровно 3 минуты)
-        cache.set('kronos_gold_1m_v1', response_data, 180)
-
+        # Кэш на 3 минуты
+        cache.set('kronos_mtf_v3', response_data, 180)
         return Response(response_data)
 
     except Exception as e:
-        print(f"❌ [KRONOS] КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        print(f"❌ [KRONOS] ОШИБКА: {e}")
         return Response({"status": "error", "message": str(e)}, status=500)

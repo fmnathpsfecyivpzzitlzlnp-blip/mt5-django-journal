@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="text-warning m-0">🔮 ИИ Прогноз: Kronos (AAAI 2026)</h4>
+        <h4 class="text-warning m-0">🔮 Квантовый Прогноз: Kronos (AAAI 2026)</h4>
         <small class="text-secondary">Базовая модель для языка финансовых рынков | Актив: <span class="text-light fw-bold">XAUUSD</span></small>
     </div>
     <div class="text-end">
@@ -16,49 +16,70 @@
 
 <div class="row g-4 mb-4">
     <div class="col-md-4">
-        <div class="card shadow border-warning bg-dark h-100">
-            <div class="card-header bg-black border-warning py-2 text-warning fw-bold text-center">
-                ОЖИДАЕМЫЙ ВЕКТОР (Ближ. 1 час)
+        <div class="card shadow border-info bg-dark h-100">
+            <div class="card-header bg-black border-info py-2 text-info fw-bold text-center">
+                🧭 КВАНТОВЫЙ СВОД (MTF)
             </div>
-            <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
-                <h1 id="ai-direction" class="display-1 fw-bold text-secondary mb-2">--</h1>
-                <h5 id="ai-target" class="text-light">Таргет: --</h5>
-                <p class="text-muted small mt-3">Уверенность модели (Top_P: 0.9): <span id="ai-confidence" class="text-info fw-bold">--%</span></p>
+            <div class="card-body p-0 d-flex flex-column justify-content-center">
+                <table class="table table-dark table-sm m-0 text-center align-middle h-100">
+                    <thead>
+                        <tr class="text-secondary small">
+                            <th class="py-3">TF</th>
+                            <th class="py-3">Вектор</th>
+                            <th class="py-3">Цель (Δ)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mtf-table-body">
+                        <tr><td colspan="3" class="text-muted small py-5">ИИ анализирует фракталы...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-black text-center border-info py-3">
+                <span id="mtf-consensus" class="fw-bold fs-5 text-light">--</span>
             </div>
         </div>
     </div>
 
     <div class="col-md-8">
         <div class="card shadow border-secondary bg-dark h-100">
-            <div class="card-header bg-black border-secondary py-2 text-info fw-bold">
-                📊 Траектория цены (Японские свечи)
+            <div class="card-header bg-black border-secondary p-0 d-flex justify-content-between align-items-center">
+                <div class="text-info fw-bold px-3 py-2">📊 Траектория K-линий</div>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-secondary btn-sm active tf-btn" data-tf="1m">1m</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm tf-btn" data-tf="5m">5m</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm tf-btn" data-tf="15m">15m</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm tf-btn" data-tf="1H">1H</button>
+                </div>
             </div>
             <div class="card-body p-0">
-                <div id="tvchart" style="width: 100%; height: 250px;"></div>
+                <div id="apexchart" style="width: 100%; min-height: 300px;"></div>
             </div>
         </div>
     </div>
 </div>
 
 <div class="card shadow border-secondary bg-dark">
-    <div class="card-header bg-black border-secondary py-2 text-light fw-bold">
-        Детализация прогнозных K-линий (Интервал 1m)
+    <div class="card-header bg-black border-secondary py-2 text-light fw-bold d-flex justify-content-between">
+        <span id="table-title">Рентген прогнозных свечей (1m)</span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-dark table-hover m-0 align-middle text-center">
                 <thead class="bg-black text-secondary small">
                     <tr>
-                        <th>Время (МСК)</th>
+                        <th>Время</th>
                         <th>Open</th>
                         <th>High</th>
                         <th>Low</th>
                         <th>Close</th>
-                        <th>Дельта</th>
+                        <th class="border-start border-secondary">Тело (Δ)</th>
+                        <th>Размах</th>
+                        <th>Тень ↑</th>
+                        <th>Тень ↓</th>
                     </tr>
                 </thead>
                 <tbody id="forecast-table-body">
-                    <tr><td colspan="6" class="py-4 text-muted">Ожидание данных от ядра Kronos...</td></tr>
+                    <tr><td colspan="9" class="py-4 text-muted">Ожидание данных...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -67,18 +88,53 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
 <script>
-    let tvChart = null;
-    let candleSeries = null;
+    let apexChart = null;
     let countdownInterval = null;
     let timeLeft = 180;
+
+    let currentTf = '1m';
+    let zoomState = { '1m': null, '5m': null, '15m': null, '1H': null };
+
+    // 🧠 СИСТЕМА НАКОПЛЕНИЯ ДАННЫХ ВНУТРИ ДНЯ (LocalStorage)
+    let dailyAccumulated = loadDailyData();
+
+    function loadDailyData() {
+        let saved = localStorage.getItem('kronosDailyData');
+        let savedDate = localStorage.getItem('kronosDate');
+        let todayDate = new Date().toLocaleDateString('ru-RU');
+
+        // Если день тот же - загружаем историю. Если наступил новый день - сбрасываем всё в 0!
+        if (saved && savedDate === todayDate) {
+            return JSON.parse(saved);
+        } else {
+            localStorage.setItem('kronosDate', todayDate);
+            return { '1m': {}, '5m': {}, '15m': {}, '1H': {} };
+        }
+    }
+
+    function saveDailyData() {
+        localStorage.setItem('kronosDailyData', JSON.stringify(dailyAccumulated));
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         initChart();
         fetchForecast();
         startCountdown();
+
+        document.querySelectorAll('.tf-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+
+                currentTf = e.target.getAttribute('data-tf');
+                document.getElementById('table-title').innerText = `Рентген прогнозных свечей (${currentTf})`;
+
+                renderActiveTab();
+            });
+        });
     });
 
     function startCountdown() {
@@ -86,10 +142,7 @@
         timeLeft = 180;
         countdownInterval = setInterval(() => {
             timeLeft--;
-            if (timeLeft <= 0) {
-                fetchForecast();
-                timeLeft = 180;
-            }
+            if (timeLeft <= 0) { fetchForecast(); timeLeft = 180; }
             let m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
             let s = (timeLeft % 60).toString().padStart(2, '0');
             document.getElementById('countdown').innerText = `${m}:${s}`;
@@ -97,109 +150,217 @@
     }
 
     async function fetchForecast() {
-        const tableBody = document.getElementById('forecast-table-body');
-        tableBody.innerHTML = `<tr><td colspan="6" class="py-5 text-center text-info"><div class="spinner-border text-info mb-2" role="status"></div><br>Модель Kronos анализирует данные с рынка...</td></tr>`;
-
         try {
             const res = await fetch('/api/api/kronos_forecast/');
             const data = await res.json();
 
             if (data.status === 'ok') {
-                updateUI(data.data);
+                updateMtfSummary(data.data);
+
+                // Склеиваем новые данные с уже накопленными за день
+                mergeNewPredictions(data.data.predictions);
+
+                renderActiveTab();
                 document.getElementById('last-update').innerText = `Последний расчет: ${new Date().toLocaleTimeString('ru-RU')}`;
-            } else {
-                tableBody.innerHTML = `<tr><td colspan="6" class="py-4 text-danger">Ошибка вычислений: ${data.message}</td></tr>`;
             }
-        } catch (e) {
-            console.error("Ошибка загрузки прогноза", e);
-            tableBody.innerHTML = `<tr><td colspan="6" class="py-4 text-danger">Сбой соединения с ядром ИИ</td></tr>`;
-        }
+        } catch (e) { console.error("Ошибка:", e); }
     }
 
-    function updateUI(data) {
-        const dirEl = document.getElementById('ai-direction');
-        if (data.overall_trend === 'UP') {
-            dirEl.innerText = '📈 ЛОНГ'; dirEl.className = 'display-4 fw-bold text-success mb-2';
-        } else if (data.overall_trend === 'DOWN') {
-            dirEl.innerText = '📉 ШОРТ'; dirEl.className = 'display-4 fw-bold text-danger mb-2';
-        } else {
-            dirEl.innerText = '↔️ ФЛЭТ'; dirEl.className = 'display-4 fw-bold text-warning mb-2';
+    function updateMtfSummary(data) {
+        let mtfHtml = '';
+        data.mtf.forEach(row => {
+            let colorClass = row.trend === 'UP' ? 'text-success' : 'text-danger';
+            let icon = row.trend === 'UP' ? '📈' : '📉';
+            let deltaStr = row.delta > 0 ? `+${row.delta}` : `${row.delta}`;
+
+            mtfHtml += `
+                <tr>
+                    <td class="fw-bold text-light">${row.tf}</td>
+                    <td class="${colorClass} fw-bold">${icon} ${row.trend === 'UP' ? 'ЛОНГ' : 'ШОРТ'}</td>
+                    <td class="${colorClass} fw-bold">${deltaStr}</td>
+                </tr>
+            `;
+        });
+        document.getElementById('mtf-table-body').innerHTML = mtfHtml;
+
+        let consensusEl = document.getElementById('mtf-consensus');
+        consensusEl.innerText = data.consensus;
+        if (data.consensus.includes('ЛОНГ')) consensusEl.className = 'fw-bold fs-5 text-success';
+        else if (data.consensus.includes('ШОРТ')) consensusEl.className = 'fw-bold fs-5 text-danger';
+        else consensusEl.className = 'fw-bold fs-5 text-warning';
+    }
+
+    // 🧠 ЛОГИКА СКЛЕИВАНИЯ СВЕЧЕЙ
+    function mergeNewPredictions(newPredictions) {
+        let todayDate = new Date().toLocaleDateString('ru-RU');
+
+        // Проверка: если день сменился прямо во время открытой вкладки
+        if (localStorage.getItem('kronosDate') !== todayDate) {
+            dailyAccumulated = { '1m': {}, '5m': {}, '15m': {}, '1H': {} };
+            localStorage.setItem('kronosDate', todayDate);
         }
-        document.getElementById('ai-target').innerText = `Таргет: ${data.target_price}`;
-        document.getElementById('ai-confidence').innerText = `${data.confidence}%`;
 
-        let html = '';
-        let candleData = [];
+        for (let tf in newPredictions) {
+            let stepMin = tf === '1m' ? 1 : tf === '5m' ? 5 : tf === '15m' ? 15 : 60;
+            let stepMs = stepMin * 60 * 1000;
+            let nowMs = Date.now();
+            let baseTimeMs = Math.ceil(nowMs / stepMs) * stepMs;
 
-        // 🧠 МАГИЯ ВРЕМЕНИ: Берем текущее время на компьютере и округляем до 1 минуты
-        let nowSec = Math.floor(Date.now() / 1000);
-        let baseTime = nowSec - (nowSec % 60);
+            newPredictions[tf].forEach((p, index) => {
+                let candleTimeMs = baseTimeMs + (index * stepMs);
 
-        data.predictions.forEach((p, index) => {
-            let deltaClass = p.close >= p.open ? 'text-success' : 'text-danger';
-            let deltaSign = p.close >= p.open ? '+' : '';
-            let deltaVal = (p.close - p.open).toFixed(2);
+                // Записываем свечу. Если свеча с таким временем уже есть - она обновится самым свежим прогнозом ИИ
+                dailyAccumulated[tf][candleTimeMs] = {
+                    timeMs: candleTimeMs,
+                    open: parseFloat(p.open),
+                    high: parseFloat(p.high),
+                    low: parseFloat(p.low),
+                    close: parseFloat(p.close)
+                };
+            });
+        }
 
-            // ИСТИННОЕ БУДУЩЕЕ: Каждая свеча строго на 1 минуту (60 сек) старше текущей
-            let candleTimeSec = baseTime + ((index + 1) * 60);
+        saveDailyData(); // Мгновенно сохраняем в память браузера
+    }
 
-            // Превращаем UNIX время в красивое московское время для таблицы
-            let dateObj = new Date(candleTimeSec * 1000);
-            let timeString = dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    function renderActiveTab() {
+        let predictionsObj = dailyAccumulated[currentTf];
+        if (!predictionsObj) return;
 
-            html += `<tr>
-                <td class="text-info fw-bold">${timeString}</td>
-                <td>${p.open.toFixed(2)}</td>
-                <td class="text-light fw-bold">${p.high.toFixed(2)}</td>
-                <td class="text-muted fw-bold">${p.low.toFixed(2)}</td>
-                <td>${p.close.toFixed(2)}</td>
-                <td class="${deltaClass} fw-bold">${deltaSign}${deltaVal}</td>
+        // Превращаем накопленный словарь обратно в массив и сортируем строго по времени (слева направо)
+        let sortedCandles = Object.values(predictionsObj).sort((a, b) => a.timeMs - b.timeMs);
+
+        let tableHtml = '';
+        let chartData = [];
+
+        sortedCandles.forEach(p => {
+            let o = p.open;
+            let h = p.high;
+            let l = p.low;
+            let c = p.close;
+
+            let bodyDelta = (c - o).toFixed(2);
+            let bodyClass = c >= o ? 'text-success' : 'text-danger';
+            let bodySign = c >= o ? '+' : '';
+
+            let spread = (h - l).toFixed(2);
+            let upperWick = (h - Math.max(o, c)).toFixed(2);
+            let lowerWick = (Math.min(o, c) - l).toFixed(2);
+
+            let dateObj = new Date(p.timeMs);
+            let timeStr = dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+            tableHtml += `<tr>
+                <td class="text-info fw-bold">${timeStr}</td>
+                <td>${o.toFixed(2)}</td>
+                <td class="text-light fw-bold">${h.toFixed(2)}</td>
+                <td class="text-muted fw-bold">${l.toFixed(2)}</td>
+                <td>${c.toFixed(2)}</td>
+                <td class="${bodyClass} fw-bold border-start border-secondary bg-dark">${bodySign}${bodyDelta}</td>
+                <td class="text-warning">${spread}</td>
+                <td class="text-secondary">${upperWick}</td>
+                <td class="text-secondary">${lowerWick}</td>
             </tr>`;
 
-            candleData.push({
-                time: candleTimeSec, // Идеальный UNIX timestamp для TradingView
-                open: parseFloat(p.open),
-                high: parseFloat(p.high),
-                low: parseFloat(p.low),
-                close: parseFloat(p.close)
+            chartData.push({
+                x: p.timeMs,
+                y: [o, h, l, c]
             });
         });
 
-        document.getElementById('forecast-table-body').innerHTML = html;
+        document.getElementById('forecast-table-body').innerHTML = tableHtml;
 
-        // Рисуем график
-        try {
-            candleSeries.setData(candleData);
-            tvChart.timeScale().fitContent();
-        } catch (e) {
-            console.error("TradingView заблокировал отрисовку:", e);
+        let optionsUpdate = { series: [{ data: chartData }] };
+
+        if (zoomState[currentTf]) {
+            optionsUpdate.xaxis = {
+                min: zoomState[currentTf].min,
+                max: zoomState[currentTf].max
+            };
+        } else {
+            optionsUpdate.xaxis = { min: undefined, max: undefined };
         }
+
+        apexChart.updateOptions(optionsUpdate, false, false);
     }
 
     function initChart() {
-        const container = document.getElementById('tvchart');
-        tvChart = LightweightCharts.createChart(container, {
-            layout: { background: { type: 'solid', color: '#212529' }, textColor: '#d1d4dc', },
-            grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
-            timeScale: { timeVisible: true, secondsVisible: false },
-            // Учим TradingView понимать русское время на оси X
-            localization: {
-                timeFormatter: timestamp => {
-                    return new Date(timestamp * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        var options = {
+            series: [{ data: [] }],
+            chart: {
+                type: 'candlestick',
+                height: 450,
+                background: '#212529',
+                animations: { enabled: false },
+                toolbar: {
+                    show: true,
+                    tools: { download: false, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true }
+                },
+                events: {
+                    zoomed: function(chartContext, { xaxis }) {
+                        zoomState[currentTf] = { min: xaxis.min, max: xaxis.max };
+                    },
+                    scrolled: function(chartContext, { xaxis }) {
+                        zoomState[currentTf] = { min: xaxis.min, max: xaxis.max };
+                    }
+                }
+            },
+            theme: { mode: 'dark' },
+            plotOptions: {
+                candlestick: {
+                    colors: { upward: '#26a69a', downward: '#ef5350' },
+                    wick: { useFillColor: true }
+                },
+                bar: { columnWidth: '60%' }
+            },
+            xaxis: {
+                type: 'datetime',
+                labels: {
+                    datetimeUTC: false,
+                    format: 'HH:mm',
+                    style: { colors: '#aab8c5', fontSize: '11px' }
+                },
+                tooltip: {
+                    enabled: true,
+                    style: { fontSize: '12px', fontFamily: 'inherit' }
+                }
+            },
+            yaxis: {
+                tooltip: { enabled: false },
+                decimalsInFloat: 2
+            },
+            tooltip: {
+                enabled: true,
+                theme: 'dark',
+                custom: function({seriesIndex, dataPointIndex, w}) {
+                    let data = w.globals.initialSeries[seriesIndex].data[dataPointIndex];
+                    let date = new Date(data.x);
+                    let timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+                    let o = data.y[0].toFixed(2);
+                    let h = data.y[1].toFixed(2);
+                    let l = data.y[2].toFixed(2);
+                    let c = data.y[3].toFixed(2);
+                    let color = (parseFloat(c) >= parseFloat(o)) ? '#26a69a' : '#ef5350';
+
+                    return `
+                    <div style="padding: 10px; background: #1a1d20; border: 1px solid #444; border-radius: 5px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+                        <div style="color: #0dcaf0; font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid #444; padding-bottom: 4px; font-size: 14px;">
+                            ⏱ Время: <span style="color: #fff;">${timeStr}</span>
+                        </div>
+                        <div style="font-size: 13px; color: #d1d4dc;">
+                            <div style="margin-bottom: 2px;">Open: <span style="font-weight: bold; color: #fff;">${o}</span></div>
+                            <div style="margin-bottom: 2px;">High: <span>${h}</span></div>
+                            <div style="margin-bottom: 2px;">Low: <span>${l}</span></div>
+                            <div>Close: <span style="font-weight: bold; color: ${color};">${c}</span></div>
+                        </div>
+                    </div>`;
                 }
             }
-        });
+        };
 
-        candleSeries = tvChart.addCandlestickSeries({
-            upColor: '#26a69a',
-            downColor: '#ef5350',
-            wickUpColor: '#26a69a',
-            wickDownColor: '#ef5350'
-        });
-
-        window.addEventListener('resize', () => {
-            tvChart.applyOptions({ width: container.clientWidth });
-        });
+        apexChart = new ApexCharts(document.querySelector("#apexchart"), options);
+        apexChart.render();
     }
 </script>
 {% endblock %}
