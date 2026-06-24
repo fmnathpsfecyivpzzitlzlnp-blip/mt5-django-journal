@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from . import views
-from .views import TradeViewSet, PlaybookViewSet, mt5_webhook, TradingRuleViewSet
+from .views import TradeViewSet, PlaybookViewSet, mt5_webhook, TradingRuleViewSet, MT5DirectExecuteView, AIForecastView
 
 router = DefaultRouter()
 # Твои сделки
@@ -30,4 +30,5 @@ urlpatterns = [
 
     path('forecast/', views.forecast_page, name='forecast'),
     path('api/kronos_forecast/', views.get_kronos_forecast, name='api_kronos_forecast'),
+    path('api/ai_forecast/', AIForecastView.as_view(), name='ai_forecast'),
 ]

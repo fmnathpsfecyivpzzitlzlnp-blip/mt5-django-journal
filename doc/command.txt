@@ -1,6 +1,12 @@
 
 start server:  python manage.py runserver --noreload
 
+Чтобы сделать бэкап вручную, просто пишешь в консоль:
+python manage.py backup_db
+В папке проекта на диске D: автоматически появится папка backups,
+а внутри нее сжатый файл с датой (например, my_db_backup_2026-06-23_15-00-00.sql).
+
+
 git status
 git add .
 git commit -m "fix: resolve 403 Forbidden errors on API endpoints" -m "- Switched Playbook API requests from fetch to XMLHttpRequest to bypass browser extension interference - Implemented explicit CSRF token handling in templates and views - Updated CORS settings and CSRF_TRUSTED_ORIGINS - Optimized frontend auth check logic"

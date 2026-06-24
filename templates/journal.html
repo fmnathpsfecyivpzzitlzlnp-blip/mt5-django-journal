@@ -962,7 +962,48 @@ https://www.tradingview.com/x/oukD8T9m/
     async function deleteTrade(id, ticket) { if (confirm(`Удалить #${ticket}?`)) { const res = await fetch(`${API_BASE}trades/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } }); if (res.ok) initPage(); } }
     function toggleAllCb(master) { document.querySelectorAll('.trade-cb').forEach(cb => cb.checked = master.checked); }
 
-    function exportToExcel() { const checkboxes = document.querySelectorAll('.trade-cb:checked'); let dataToExport = []; if (checkboxes.length > 0) { const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value)); dataToExport = allTradesData.filter(t => selectedIds.includes(t.id)); } else { dataToExport = currentFilteredTrades; } if (dataToExport.length === 0) return alert("Нет данных!"); let csvContent = "\uFEFFТикет;Дата;Актив;Тип;Объем;PnL;Magic;MT5 Коммент;Тренд;Логика;Ранг\n"; dataToExport.forEach(t => { const d = new Date(t.time); const dateStr = d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit', year: 'numeric'}).replace(',', ''); csvContent += `${t.ticket};${dateStr};${t.symbol || ''};${t.type};${t.volume.toString().replace('.', ',')};${t.profit.toString().replace('.', ',')};${t.magic_number || ''};${t.mt5_comment || ''};${t.market_trend || ''};${t.entry_logic || ''};${t.setup_grade || ''}\n`; }); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "trades_export.csv"; link.click(); }
+    function exportToExcel() {
+        const checkboxes = document.querySelectorAll('.trade-cb:checked');
+        let dataToExport = [];
+
+        if (checkboxes.length > 0) {
+            const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            dataToExport = allTradesData.filter(t => selectedIds.includes(t.id));
+        } else {
+            dataToExport = currentFilteredTrades;
+        }
+
+        if (dataToExport.length === 0) return alert("Нет данных для экспорта!");
+
+        // Добавляем колонку "Качество исполнения"
+        let csvContent = "\uFEFFТикет;Дата;Актив;Тип;Объем;PnL;Magic;Тренд;Логика;Психология;Ранг;Исполнение\n";
+
+        dataToExport.forEach(t => {
+            const d = new Date(t.time);
+            const dateStr = d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit', year: 'numeric'}).replace(',', '');
+
+            // Квантовый фильтр: разделяем системные и несистемные сделки
+            let executionQuality = "Системно";
+            if (t.psychology && ['FOMO (Жадность)', 'Тильт (Отыгрыш)', 'Страх (Неуверенность)'].includes(t.psychology)) {
+                executionQuality = "Эмоционально (Ошибка)";
+            } else if (t.entry_logic === 'Пиво / Галюны / Нет логики') {
+                executionQuality = "Мусор";
+            } else if (!t.setup_grade && !t.psychology) {
+                executionQuality = "Не размечено";
+            }
+
+            // Защита от пустых значений
+            const safe = (val) => (val || '').toString().replace(/;/g, ',');
+
+            csvContent += `${safe(t.ticket)};${dateStr};${safe(t.symbol)};${safe(t.type)};${safe(t.volume).replace('.', ',')};${safe(t.profit).replace('.', ',')};${safe(t.magic_number)};${safe(t.market_trend)};${safe(t.entry_logic)};${safe(t.psychology)};${safe(t.setup_grade)};${executionQuality}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `trades_audit_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+    }
 
     async function copyTrade(id) {
         if (!confirm("Создать копию этой сделки вместе со всеми картинками и разбором?")) return;
@@ -1064,61 +1105,93 @@ https://www.tradingview.com/x/oukD8T9m/
         }, 500);
     }
     function exportFilteredPDF() {
-    const searchVal = document.getElementById('filter-search').value;
-    const pnlVal = document.getElementById('filter-pnl').value;
-    const typeVal = document.getElementById('filter-type').value;
+        const checkboxes = document.querySelectorAll('.trade-cb:checked');
+        let params = new URLSearchParams({ is_processed: 'true' });
+        let tradeCount = 0;
 
-    // Собираем все текущие фильтры в строку запроса
-    let params = new URLSearchParams({
-        is_processed: 'true',
-        search: searchVal,
-        pnl: pnlVal,
-        type: typeVal
-    });
+        // 1. ПРОВЕРЯЕМ ГАЛОЧКИ
+        if (checkboxes.length > 0) {
+            // Если есть галочки - берем только их!
+            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+            params.append('ids', selectedIds.join(','));
+            tradeCount = selectedIds.length;
+        } else {
+            // Если галочек нет - берем весь фильтр из меню
+            tradeCount = currentFilteredTrades.length;
 
-    window.open(`${API_BASE}trades/export_filtered_pdf/?${params.toString()}`, '_blank');
-}
-async function createManualTrade() {
-        const payload = {
-            author: document.getElementById('manual-author').value,
-            symbol: document.getElementById('manual-symbol').value,
-            type: document.getElementById('manual-type').value,
-            profit: document.getElementById('manual-profit').value,
-            date: document.getElementById('manual-date').value
-        };
+            const searchVal = document.getElementById('filter-search').value;
+            const pnlVal = document.getElementById('filter-pnl').value;
+            const typeVal = document.getElementById('filter-type').value;
+            const dateVal = document.getElementById('filter-date').value;
+            const exactDateVal = document.getElementById('filter-exact-date').value;
+            const trendVal = document.getElementById('filter-trend').value;
+            const logicVal = document.getElementById('filter-logic').value;
+            const reviewVal = document.getElementById('filter-review').value;
+            const magicVal = document.getElementById('filter-magic').value;
+            const commentVal = document.getElementById('filter-comment').value;
 
-        try {
-            const res = await fetch(`${API_BASE}trades/add_manual/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                const modalEl = document.getElementById('addManualTradeModal');
-                const modalInstance = bootstrap.Modal.getInstance(modalEl);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-
-                document.getElementById('manual-author').value = '';
-                document.getElementById('manual-profit').value = '';
-                document.getElementById('manual-date').value = '';
-
-                initPage();
-            } else {
-                const errText = await res.text();
-                alert(`Ошибка сервера при добавлении! Пожалуйста, нажми Ctrl+F5.\n\nДетали: ${errText}`);
-                console.error("Ошибка:", errText);
-            }
-        } catch (e) {
-            console.error("Ошибка сети:", e);
-            alert("Ошибка сети. Проверьте консоль браузера.");
+            if (searchVal) params.append('search', searchVal);
+            if (pnlVal) params.append('pnl', pnlVal);
+            if (typeVal) params.append('type', typeVal);
+            if (dateVal && dateVal !== 'all') params.append('date', dateVal);
+            if (exactDateVal) params.append('exact_date', exactDateVal);
+            if (trendVal) params.append('trend', trendVal);
+            if (logicVal) params.append('logic', logicVal);
+            if (reviewVal && reviewVal !== 'all') params.append('review', reviewVal);
+            if (magicVal) params.append('magic', magicVal);
+            if (commentVal) params.append('comment', commentVal);
         }
+
+        // 2. ЗАЩИТНЫЙ ПРЕДОХРАНИТЕЛЬ С ПРАВИЛЬНОЙ ЦИФРОЙ
+        if (tradeCount > 30) {
+            const confirmExport = confirm(`⚠️ ВНИМАНИЕ!\n\nВы пытаетесь выгрузить ${tradeCount} сделок.\nЧтобы сервер не завис от скачивания сотен картинок, он аппаратно обрежет выгрузку до 30-50 штук.\n\nПродолжить?`);
+            if (!confirmExport) return;
+        }
+
+        // 3. ОТКРЫВАЕМ ВКЛАДКУ
+        window.open(`${API_BASE}trades/export_filtered_pdf/?${params.toString()}`, '_blank');
     }
+    async function createManualTrade() {
+            const payload = {
+                author: document.getElementById('manual-author').value,
+                symbol: document.getElementById('manual-symbol').value,
+                type: document.getElementById('manual-type').value,
+                profit: document.getElementById('manual-profit').value,
+                date: document.getElementById('manual-date').value
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}trades/add_manual/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    const modalEl = document.getElementById('addManualTradeModal');
+                    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+
+                    document.getElementById('manual-author').value = '';
+                    document.getElementById('manual-profit').value = '';
+                    document.getElementById('manual-date').value = '';
+
+                    initPage();
+                } else {
+                    const errText = await res.text();
+                    alert(`Ошибка сервера при добавлении! Пожалуйста, нажми Ctrl+F5.\n\nДетали: ${errText}`);
+                    console.error("Ошибка:", errText);
+                }
+            } catch (e) {
+                console.error("Ошибка сети:", e);
+                alert("Ошибка сети. Проверьте консоль браузера.");
+            }
+        }
 </script>
 {% endblock %}

@@ -10,6 +10,9 @@
     /* Стили для кликабельной шапки таблицы */
     th.sortable { cursor: pointer; transition: background 0.2s; user-select: none; }
     th.sortable:hover { background-color: #333; }
+
+    /* Стили для вывода ответа ИИ */
+    .ai-response-box { background-color: #1a1d20; border: 1px solid #0dcaf0; border-radius: 5px; padding: 15px; font-size: 0.9rem; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
 </style>
 {% endblock %}
 
@@ -17,54 +20,100 @@
 <div style="display: none;">{% csrf_token %}</div>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <button class="btn btn-outline-warning fw-bold me-2" onclick="new bootstrap.Modal(document.getElementById('manualTradeModal')).show()">➕ Чужая сделка</button>
-    <h4 class="text-light">📥 Необработанные сделки (Inbox)</h4>
-    <button class="btn btn-primary fw-bold" onclick="processSelectedTrades()">Отправить в Дневник ➡️</button>
+    <div>
+        <button class="btn btn-outline-info fw-bold me-2 shadow-sm" onclick="new bootstrap.Modal(document.getElementById('aiForecastModal')).show()">🤖 Запросить ИИ-Прогноз</button>
+        <button class="btn btn-outline-warning fw-bold me-2" onclick="new bootstrap.Modal(document.getElementById('addManualTradeModal')).show()">➕ Чужая сделка</button>
+    </div>
+    <h4 class="text-light m-0">📥 Необработанные сделки (Inbox)</h4>
+    <button class="btn btn-primary fw-bold shadow" onclick="processSelectedTrades()">Отправить в Дневник ➡️</button>
 </div>
 
-<div class="modal fade" id="manualTradeModal" tabindex="-1">
+<div class="modal fade" id="aiForecastModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header bg-black border-info">
+                <h5 class="modal-title text-info">🤖 Аналитический консилиум (TradingAgents)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="small text-secondary mb-1">Актив для анализа</label>
+                        <input type="text" id="ai-symbol" class="form-control bg-dark text-light border-secondary" value="XAUUSD">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small text-secondary mb-1">Дата</label>
+                        <input type="date" id="ai-date" class="form-control bg-dark text-light border-secondary">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small text-secondary mb-1">Стиль торговли</label>
+                        <select id="ai-forecast-type" class="form-select bg-dark text-light border-secondary">
+                            <option value="macro">📉 Глобальный (Свинг, 1-3 дня)</option>
+                            <option value="intraday">⚡ Скальпинг (Интрадей, 2-4 часа)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="text-center mb-3">
+                    <button id="btn-run-ai" class="btn btn-info w-100 fw-bold text-dark" onclick="runAIForecast()">Начать анализ рынка 🧠</button>
+                </div>
+
+                <div id="ai-loading-zone" class="text-center d-none py-4">
+                    <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h6 class="text-light">Агенты совещаются...</h6>
+                    <p class="text-muted small">Фундаменталист, Технарь и Риск-менеджер анализируют рынок. Это может занять до нескольких минут.</p>
+                </div>
+
+                <div id="ai-result-zone" class="d-none">
+                    <h6 class="text-success mb-2">✅ Вердикт ИИ:</h6>
+                    <div id="ai-response-text" class="ai-response-box mb-3 text-light"></div>
+
+                    <div class="alert alert-dark border-secondary p-2 d-flex justify-content-between align-items-center mb-0">
+                        <span class="small text-muted">Хочешь сохранить этот прогноз как сделку для истории?</span>
+                        <button class="btn btn-sm btn-warning fw-bold text-dark" onclick="transferAIToManualTrade()">Создать карточку сделки</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addManualTradeModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark border-warning">
-            <div class="modal-header border-secondary bg-black">
+            <div class="modal-header bg-black border-secondary">
                 <h5 class="modal-title text-warning">👽 Добавить сделку на разбор</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Автор (Напр: Регина, RS)</label>
-                        <input type="text" id="man-author" class="form-control bg-dark text-light border-secondary" value="Регина">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Направление</label>
-                        <select id="man-type" class="form-select bg-dark text-light border-secondary">
-                            <option value="SELL">🔴 SELL (Шорт)</option>
-                            <option value="BUY">🟢 BUY (Лонг)</option>
-                        </select>
+                    <div class="col-md-12">
+                        <label class="small text-secondary mb-1">Автор сделки</label>
+                        <input type="text" id="manual-author" class="form-control bg-dark text-light border-secondary" placeholder="Например: RS">
                     </div>
                     <div class="col-md-6">
                         <label class="small text-secondary mb-1">Актив</label>
-                        <input type="text" id="man-symbol" class="form-control bg-dark text-light border-secondary" value="XAUUSD">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Дата</label>
-                        <input type="date" max="9999-12-31" id="man-date" class="form-control bg-dark text-light border-secondary">
-                    </div>
-                    <div class="col-md-12">
-                        <label class="small text-secondary mb-1">Результат сделки</label>
-                        <select id="man-profit" class="form-select bg-dark text-light border-secondary">
-                            <option value="1">🟢 Профит (Тейк)</option>
-                            <option value="-1">🔴 Убыток (Стоп)</option>
-                            <option value="0">⚪ Б/У (Ноль)</option>
+                        <select id="manual-symbol" class="form-select bg-dark text-light border-secondary">
+                            <option value="XAUUSD">XAUUSD (Золото)</option>
+                            <option value="BTCUSD">BTCUSD (Bitcoin)</option>
+                            <option value="ETHUSD">ETHUSD (Ethereum)</option>
                         </select>
                     </div>
-                </div>
-                <div class="mt-4 alert alert-dark border-secondary small text-muted p-2">
-                    ℹ️ <b>Объем и PnL будут равны 0.</b> Эти сделки не испортят твою личную статистику доходности. Ссылки на TradingView и логику добавишь уже внутри разбора.
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Направление</label>
+                        <select id="manual-type" class="form-select bg-dark text-light border-secondary">
+                            <option value="SELL">🔴 SELL</option>
+                            <option value="BUY">🟢 BUY</option>
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="small text-secondary mb-1">Дата</label>
+                        <input type="date" id="manual-date" class="form-control bg-dark text-light border-secondary">
+                    </div>
                 </div>
             </div>
             <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-warning w-100 fw-bold" onclick="submitManualTrade()">Создать карточку</button>
+                <button class="btn btn-warning w-100 fw-bold text-dark" onclick="createManualTrade()">Создать карточку</button>
             </div>
         </div>
     </div>
@@ -237,13 +286,29 @@
 {% block scripts %}
 <script>
     let inboxTrades = [];
-    let currentSort = { column: 'time', asc: false }; // Состояние сортировки
+    let currentSort = { column: 'time', asc: false };
+
+    let lastAIForecastText = "";
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById('ai-date').valueAsDate = new Date();
+
+        const manualModal = document.getElementById('addManualTradeModal');
+        if (manualModal) {
+            manualModal.addEventListener('show.bs.modal', function () {
+                const lastSymbol = localStorage.getItem('last_manual_symbol');
+                if (lastSymbol) {
+                    document.getElementById('manual-symbol').value = lastSymbol;
+                }
+            });
+        }
+        initPage();
+    });
 
     async function initPage() {
         const res = await fetch(API_BASE + 'trades/?is_processed=false');
         inboxTrades = await res.json();
 
-        // 👇 ВОССТАНАВЛИВАЕМ ФИЛЬТРЫ ИЗ ПАМЯТИ ПЕРЕД ЗАПУСКОМ 👇
         if(localStorage.getItem('inbox_type')) document.getElementById('inbox-filter-type').value = localStorage.getItem('inbox_type');
         if(localStorage.getItem('shared_sym')) document.getElementById('inbox-filter-search').value = localStorage.getItem('shared_sym');
         if(localStorage.getItem('shared_mag')) document.getElementById('inbox-filter-magic').value = localStorage.getItem('shared_mag');
@@ -256,16 +321,14 @@
         applyInboxFilters();
     }
 
-    // 👇 ФУНКЦИЯ СОРТИРОВКИ ПО КЛИКУ 👇
     function sortTable(col) {
         if (currentSort.column === col) {
             currentSort.asc = !currentSort.asc;
         } else {
             currentSort.column = col;
-            currentSort.asc = (col === 'profit'); // PnL по умолчанию по убыванию
+            currentSort.asc = (col === 'profit');
         }
 
-        // Обновляем стрелочки
         document.querySelectorAll('th.sortable').forEach(th => th.innerHTML = th.innerHTML.replace(' 🔼', ' ↕️').replace(' 🔽', ' ↕️'));
         const activeTh = document.getElementById(`th-${col}`);
         if(activeTh) activeTh.innerHTML = activeTh.innerHTML.replace(' ↕️', currentSort.asc ? ' 🔼' : ' 🔽');
@@ -273,10 +336,7 @@
         applyInboxFilters();
     }
 
-    // 👇 ФУНКЦИЯ ФИЛЬТРАЦИИ И СОРТИРОВКИ 👇
-    // 👇 ОБНОВЛЕННАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ 👇
     function applyInboxFilters() {
-        // 👇 СОХРАНЯЕМ ВСЕ ФИЛЬТРЫ В ПАМЯТЬ ПРИ ЛЮБОМ ИЗМЕНЕНИИ 👇
         localStorage.setItem('inbox_type', document.getElementById('inbox-filter-type').value);
         localStorage.setItem('shared_sym', document.getElementById('inbox-filter-search').value);
         localStorage.setItem('shared_mag', document.getElementById('inbox-filter-magic').value);
@@ -339,8 +399,6 @@
         renderInbox(filtered);
     }
 
-    // 👇 ОТРИСОВКА ТАБЛИЦЫ 👇
-    // 👇 ОТРИСОВКА ТАБЛИЦЫ (БЕЗ КНОПКИ РАЗБОР) 👇
     function renderInbox(trades) {
         let html = '';
         trades.forEach(t => {
@@ -380,11 +438,11 @@
         document.getElementById('inbox-table-body').innerHTML = html || '<tr><td colspan="8" class="text-center py-5 text-secondary">Сделки не найдены</td></tr>';
     }
 
-    // --- Массовые действия ---
     function toggleAll(source) {
         let checkboxes = document.querySelectorAll('.trade-checkbox');
         for(let i=0; i<checkboxes.length; i++) checkboxes[i].checked = source.checked;
     }
+
     async function markAsProcessedSingle(id) {
         const fd = new FormData();
         fd.append('is_processed', 'true');
@@ -392,12 +450,11 @@
             method: 'PATCH',
             body: fd,
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            credentials: 'same-origin' // 👈 ЗАЩИТА ОТ 403
+            credentials: 'same-origin'
         });
         initPage();
     }
 
-    // 👇 ВОТ ЭТА ФУНКЦИЯ ПРОПАЛА, ТЕПЕРЬ ОНА НА МЕСТЕ 👇
     async function processSelectedTrades() {
         const selected = Array.from(document.querySelectorAll('.trade-checkbox:checked')).map(cb => parseInt(cb.value));
         if (selected.length === 0) return alert("Выберите хотя бы одну сделку!");
@@ -423,7 +480,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                credentials: 'same-origin', // 👈 ЗАЩИТА ОТ 403
+                credentials: 'same-origin',
                 body: JSON.stringify(payload)
             });
 
@@ -453,15 +510,90 @@
             const res = await fetch(`${API_BASE}trades/${id}/`, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                credentials: 'same-origin' // 👈 ЗАЩИТА ОТ 403
+                credentials: 'same-origin'
             });
             if (res.ok) initPage();
         }
     }
 
-    // --- МОДАЛКА ЭКСПРЕСС-РАЗБОРА ---
+    async function runAIForecast() {
+        const symbol = document.getElementById('ai-symbol').value;
+        const dateStr = document.getElementById('ai-date').value;
+        const forecastType = document.getElementById('ai-forecast-type').value; // 👈 Добавили
+
+        if (!symbol || !dateStr) {
+            return alert("Укажите актив и дату!");
+        }
+
+        const btn = document.getElementById('btn-run-ai');
+        const loadingZone = document.getElementById('ai-loading-zone');
+        const resultZone = document.getElementById('ai-result-zone');
+        const responseBox = document.getElementById('ai-response-text');
+
+        btn.classList.add('d-none');
+        resultZone.classList.add('d-none');
+        loadingZone.classList.remove('d-none');
+
+        let csrfToken = window.CSRF_TOKEN || getCookie('csrftoken');
+        const tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (tokenElement) csrfToken = tokenElement.value;
+
+        try {
+            const res = await fetch(`/api/api/ai_forecast/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                // 👇 Передаем type на сервер 👇
+                body: JSON.stringify({ symbol: symbol, date: dateStr, type: forecastType })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                lastAIForecastText = data.decision || data.message || "ИИ не вернул текст решения.";
+                responseBox.innerText = lastAIForecastText;
+
+                loadingZone.classList.add('d-none');
+                resultZone.classList.remove('d-none');
+            } else {
+                alert(`Ошибка ИИ: ${data.error || "Неизвестная ошибка сервера"}`);
+                btn.classList.remove('d-none');
+                loadingZone.classList.add('d-none');
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert("Ошибка сети при попытке связаться с ИИ.");
+            btn.classList.remove('d-none');
+            loadingZone.classList.add('d-none');
+        }
+    }
+
+    function transferAIToManualTrade() {
+        bootstrap.Modal.getInstance(document.getElementById('aiForecastModal')).hide();
+
+        const manualModal = new bootstrap.Modal(document.getElementById('addManualTradeModal'));
+
+        document.getElementById('manual-author').value = 'TradingAgents AI';
+        document.getElementById('manual-date').value = document.getElementById('ai-date').value;
+
+        if (lastAIForecastText.toLowerCase().includes('buy') || lastAIForecastText.toLowerCase().includes('покупать')) {
+            document.getElementById('manual-type').value = 'BUY';
+        } else {
+            document.getElementById('manual-type').value = 'SELL';
+        }
+
+        manualModal.show();
+
+        navigator.clipboard.writeText(lastAIForecastText).then(() => {
+            alert("Текст прогноза скопирован в буфер обмена! Вы сможете вставить его в поле 'Моя логика' при разборе сделки.");
+        });
+    }
+
     async function openReviewModal(id) {
-        currentReviewTradeId = id; const t = allInboxData.find(trade => trade.id === id);
+        currentReviewTradeId = id; const t = inboxTrades.find(trade => trade.id === id);
         document.getElementById('rev-ticket').innerText = t.ticket;
         const isSel = (val, field) => (t[field] === val) ? 'selected' : '';
 
@@ -478,13 +610,11 @@
         clearSmartInput('my'); reviewModal.show();
     }
 
-    // --- Dropzones ---
     function setupSmartDropzones() { const dropzone = document.getElementById(`my-dropzone`); const fileInput = document.getElementById(`my-file-input`); const urlInput = document.getElementById(`my-url-input`); fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) setPreview(e.target.files[0], 'my'); }); dropzone.addEventListener('paste', (e) => { e.preventDefault(); const items = (e.clipboardData || window.clipboardData).items; for (let index in items) { let item = items[index]; if (item.kind === 'file' && item.type.startsWith('image/')) { setPreview(item.getAsFile(), 'my'); } else if (item.kind === 'string' && item.type === 'text/plain') { item.getAsString(text => { if (text.includes('tradingview.com/x/')) { urlInput.value = text; setPreview(text, 'my'); } }); } } }); urlInput.addEventListener('input', (e) => { if (e.target.value.includes('tradingview.com/x/')) setPreview(e.target.value, 'my'); }); }
     function setPreview(fileOrUrl, prefix) { const previewContainer = document.getElementById(`${prefix}-preview-container`); const previewImg = document.getElementById(`${prefix}-preview-img`); const dropText = document.getElementById(`${prefix}-drop-text`); if (typeof fileOrUrl === 'string') { previewImg.src = fileOrUrl; fileState[prefix] = null; } else { previewImg.src = URL.createObjectURL(fileOrUrl); fileState[prefix] = fileOrUrl; document.getElementById(`${prefix}-url-input`).value = ''; } previewContainer.classList.remove('d-none'); dropText.classList.add('d-none'); }
     function clearSmartInput(prefix, event) { if(event) event.stopPropagation(); fileState[prefix] = null; document.getElementById(`${prefix}-file-input`).value = ''; document.getElementById(`${prefix}-url-input`).value = ''; document.getElementById(`${prefix}-preview-container`).classList.add('d-none'); document.getElementById(`${prefix}-drop-text`).classList.remove('d-none'); document.getElementById(`${prefix}-preview-img`).src = ''; }
 
     async function submitAnalysis(type) {
-        // type здесь всегда 'my', потому что во Входящих мы грузим только свои скрины
         const fd = new FormData();
         const urlValue = document.getElementById(`my-url-input`).value;
 
@@ -503,8 +633,6 @@
         fd.append('entry_logic', document.getElementById('modal-logic').value);
         fd.append('psychology', document.getElementById('modal-psy').value);
         fd.append('setup_grade', document.getElementById('modal-grade').value);
-
-        // Отмечаем, что сделка обработана и должна улететь в Дневник
         fd.append('is_processed', 'true');
 
         const btn = event.target;
@@ -513,23 +641,20 @@
         btn.innerText = "Загрузка...";
 
         try {
-            // 1. Отправляем картинку
             await fetch(`${API_BASE}trades/${currentReviewTradeId}/add_analysis_screen/`, {
                 method: 'POST',
                 body: fd,
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                credentials: 'same-origin' // 👈 Защита от 403
+                credentials: 'same-origin'
             });
 
-            // 2. Сохраняем логику и тренд
             await fetch(`${API_BASE}trades/${currentReviewTradeId}/`, {
                 method: 'PATCH',
                 body: fd,
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                credentials: 'same-origin' // 👈 Защита от 403
+                credentials: 'same-origin'
             });
 
-            // 3. Зеленая кнопка успеха
             btn.disabled = false;
             btn.classList.replace('btn-warning', 'btn-success');
             btn.innerText = "✅ Успешно! Можно добавлять следующий скрин";
@@ -539,12 +664,9 @@
                 btn.innerText = origText;
             }, 3000);
 
-            // 4. Очищаем форму для нового скрина
             clearSmartInput('my');
             document.getElementById('my-desc').value = '';
 
-            // 5. Рисуем картинку в ленте и обновляем таблицу
-            await loadReviewFeeds();
             initPage();
 
         } catch(e) {
@@ -553,19 +675,21 @@
         }
     }
 
-    async function submitManualTrade() {
+    async function createManualTrade() {
+        const symbolValue = document.getElementById('manual-symbol').value;
+        localStorage.setItem('last_manual_symbol', symbolValue);
+
         const payload = {
-            author: document.getElementById('man-author').value || 'Unknown',
-            type: document.getElementById('man-type').value,
-            symbol: document.getElementById('man-symbol').value,
-            date: document.getElementById('man-date').value,
-            profit: document.getElementById('man-profit').value
+            author: document.getElementById('manual-author').value || 'Unknown',
+            symbol: symbolValue,
+            type: document.getElementById('manual-type').value,
+            date: document.getElementById('manual-date').value,
+            profit: 0
         };
 
         if (!payload.date) return alert("Укажи дату сделки!");
 
-        // 👇 БРОНЕБОЙНЫЙ ПОИСК ТОКЕНА 👇
-        let csrfToken = getCookie('csrftoken');
+        let csrfToken = window.CSRF_TOKEN || getCookie('csrftoken');
         const tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
         if (tokenElement) {
             csrfToken = tokenElement.value;
@@ -577,14 +701,13 @@
         btn.innerText = "Создание...";
 
         try {
-            // 👇 ТУТ ИСПРАВЛЕНЫ КАВЫЧКИ 👇
             const res = await fetch(`${API_BASE}trades/add_manual/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                credentials: 'same-origin', // 👈 ИМЕННО ЭТО УБИВАЕТ ОШИБКУ 403
+                credentials: 'same-origin',
                 body: JSON.stringify(payload)
             });
 
@@ -592,14 +715,12 @@
             btn.innerText = origText;
 
             if (res.ok) {
-                bootstrap.Modal.getInstance(document.getElementById('manualTradeModal')).hide();
+                bootstrap.Modal.getInstance(document.getElementById('addManualTradeModal')).hide();
 
-                // Авто-фильтрация по дате новой сделки
-                const tradeDate = document.getElementById('man-date').value;
+                const tradeDate = document.getElementById('manual-date').value;
                 localStorage.setItem('inbox_d_from', tradeDate);
                 localStorage.setItem('inbox_d_to', tradeDate);
 
-                // Сбрасываем остальные фильтры
                 localStorage.setItem('inbox_type', '');
                 localStorage.setItem('shared_sym', '');
                 localStorage.setItem('shared_mag', '');
@@ -607,13 +728,14 @@
                 localStorage.setItem('inbox_c_from', '');
                 localStorage.setItem('inbox_c_to', '');
 
-                document.getElementById('man-date').value = '';
+                document.getElementById('manual-author').value = '';
+                document.getElementById('manual-date').value = '';
+
                 initPage();
             } else {
                 const errText = await res.text();
-                // 👇 ТУТ ТОЖЕ ИСПРАВЛЕНЫ КАВЫЧКИ 👇
-                alert(`Ошибка сервера: ${errText}`);
-                console.error(errText);
+                alert(`Ошибка сервера при добавлении! Пожалуйста, нажми Ctrl+F5.\n\nДетали: ${errText}`);
+                console.error("Ошибка:", errText);
             }
         } catch (e) {
             btn.disabled = false;

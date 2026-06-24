@@ -3,6 +3,18 @@ import urllib.request
 import re
 from urllib.parse import unquote
 import sys
+import traceback # Добавь этот импорт в начало views.py
+
+sys.path.append(r'd:\project\python\trade_j\tradingagents')
+try:
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.default_config import DEFAULT_CONFIG
+
+    TRADING_AGENTS_READY = True
+except ImportError:
+    TRADING_AGENTS_READY = False
+    print("❌ ВНИМАНИЕ: Библиотека TradingAgents не найдена!")
+
 
 import requests
 from django.conf import settings
@@ -18,6 +30,7 @@ from django.db.models import Sum, Q, Count
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from rest_framework.views import APIView
 from xhtml2pdf import pisa
 
 from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, FAQBlock, FAQTopic, UserQuizProgress, Question, \
@@ -26,6 +39,8 @@ import csv
 from datetime import datetime, timedelta
 import pytz
 import base64
+
+from .mt5_service import MT5Bridge
 from .serializers import TradeSerializer, FAQBlockSerializer, FAQTopicSerializer, \
     QuestionSerializer, QuizSerializer  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
 import random
@@ -133,36 +148,77 @@ class TradeViewSet(viewsets.ModelViewSet):
         # Временно увеличиваем лимит рекурсии для тяжелых PDF файлов
         sys.setrecursionlimit(5000)
 
-        # 1. Берем базовый запрос (только обработанные сделки пользователя)
-        qs = Trade.objects.filter(user=request.user, is_processed=True).order_by('-time')
+        # 👇 1. ПРОВЕРЯЕМ, ПЕРЕДАЛИ ЛИ НАМ КОНКРЕТНЫЕ ID (ГАЛОЧКИ) 👇
+        ids_str = request.query_params.get('ids')
 
-        # 2. Применяем текстовый поиск
-        search_query = request.query_params.get('search')
-        if search_query:
-            qs = qs.filter(
-                Q(ticket__icontains=search_query) |
-                Q(symbol__icontains=search_query) |
-                Q(comment__icontains=search_query) |
-                Q(mt5_comment__icontains=search_query) |
-                Q(analysis_screens__description__icontains=search_query) |
-                Q(mentor_reviews__mentor_comment__icontains=search_query)
-            ).distinct()
+        if ids_str:
+            # Если человек отметил галочками конкретные сделки:
+            trade_ids = [int(x) for x in ids_str.split(',') if x.isdigit()]
+            qs = Trade.objects.filter(user=request.user, id__in=trade_ids).order_by('-time')
 
-        # 3. Применяем остальные фильтры (PnL, Тип и т.д.)
-        pnl_val = request.query_params.get('pnl')
-        if pnl_val == 'win':
-            qs = qs.filter(profit__gt=0)
-        elif pnl_val == 'loss':
-            qs = qs.filter(profit__lt=0)
+            # Увеличиваем лимит для ручного выбора до 50
+            qs = qs[:50]
+        else:
+            # Если галочек нет, фильтруем по всем параметрам
+            qs = Trade.objects.filter(user=request.user, is_processed=True).order_by('-time')
 
-        trade_type = request.query_params.get('type')
-        if trade_type: qs = qs.filter(type=trade_type)
+            search_query = request.query_params.get('search')
+            if search_query:
+                qs = qs.filter(
+                    Q(ticket__icontains=search_query) |
+                    Q(symbol__icontains=search_query) |
+                    Q(comment__icontains=search_query) |
+                    Q(mt5_comment__icontains=search_query) |
+                    Q(analysis_screens__description__icontains=search_query) |
+                    Q(mentor_reviews__mentor_comment__icontains=search_query)
+                ).distinct()
 
-        # 🛑 ПРЕДОХРАНИТЕЛЬ: ограничиваем 100 сделками за раз
-        # Это защитит сервер от падения по памяти, если фильтры пустые
-        qs = qs[:100]
+            pnl_val = request.query_params.get('pnl')
+            if pnl_val == 'win':
+                qs = qs.filter(profit__gt=0)
+            elif pnl_val == 'loss':
+                qs = qs.filter(profit__lt=0)
 
-        # 4. Генерация PDF
+            trade_type = request.query_params.get('type')
+            if trade_type: qs = qs.filter(type=trade_type)
+
+            exact_date = request.query_params.get('exact_date')
+            date_filter = request.query_params.get('date')
+
+            if exact_date:
+                qs = qs.filter(time__date=exact_date)
+            elif date_filter and date_filter != 'all':
+                from django.utils import timezone
+                now = timezone.now()
+                if date_filter == '2weeks':
+                    qs = qs.filter(time__gte=now - timedelta(days=14))
+                elif date_filter == 'month':
+                    qs = qs.filter(time__gte=now - timedelta(days=30))
+                elif date_filter == 'week':
+                    qs = qs.filter(time__gte=now - timedelta(days=7))
+
+            trend = request.query_params.get('trend')
+            if trend: qs = qs.filter(market_trend=trend)
+
+            logic = request.query_params.get('logic')
+            if logic: qs = qs.filter(entry_logic=logic)
+
+            magic = request.query_params.get('magic')
+            if magic: qs = qs.filter(magic_number__icontains=magic)
+
+            comment_val = request.query_params.get('comment')
+            if comment_val: qs = qs.filter(mt5_comment__icontains=comment_val)
+
+            review = request.query_params.get('review')
+            if review == 'with_review':
+                qs = qs.exclude(mentor_reviews__isnull=True)
+            elif review == 'no_review':
+                qs = qs.filter(mentor_reviews__isnull=True)
+
+            # Предохранитель для массовой выгрузки
+            qs = qs[:30]
+
+        # ГЕНЕРАЦИЯ PDF
         font_path = os.path.join(str(settings.BASE_DIR), 'fonts', 'DejaVuSans.ttf')
         try:
             pdfmetrics.registerFont(TTFont('DejaVu', font_path))
@@ -1223,3 +1279,113 @@ def get_kronos_forecast(request):
     except Exception as e:
         print(f"❌ [KRONOS] ОШИБКА: {e}")
         return Response({"status": "error", "message": str(e)}, status=500)
+
+class MT5DirectExecuteView(APIView):
+    """
+    Эндпоинт для мгновенного открытия реальной сделки в локальном MT5
+    """
+    def post(self, request):
+        symbol = request.data.get('symbol', 'XAUUSD')
+        action_type = request.data.get('type') # BUY или SELL
+        volume = request.data.get('volume')    # Лотность, например 0.1
+        comment = request.data.get('comment', 'Direct Exec')
+
+        if not action_type or not volume:
+            return Response({"error": "Пропущен тип сделки или объем (лот)."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Вызываем наш потокобезопасный мост
+            res = MT5Bridge.execute_market_order(
+                symbol=symbol,
+                action_type=action_type,
+                volume=volume,
+                comment=comment
+            )
+
+            if res["status"] == "ok":
+                return Response({
+                    "success": True,
+                    "ticket": res["ticket"],
+                    "price": res["price"],
+                    "message": f"Ордер #{res['ticket']} успешно открыт по цене {res['price']}"
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": res["message"]}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({"error": f"Внутренний сбой моста: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# class AIForecastView(APIView):
+#     def post(self, request):
+#         if not TRADING_AGENTS_READY:
+#             return Response({"error": "Библиотека TradingAgents не установлена."}, status=500)
+#
+#         symbol = request.data.get('symbol', 'XAUUSD')
+#         date = request.data.get('date')
+#
+#         try:
+#             # 👇 ГЛАВНЫЙ СЕКРЕТ 👇
+#             # Некоторые версии библиотеки смотрят не в конфиг, а в переменные окружения
+#             os.environ["OPENAI_API_KEY"] = "lm-studio"
+#             os.environ["OPENAI_BASE_URL"] = "http://127.0.0.1:1234/v1"
+#
+#             config = DEFAULT_CONFIG.copy()
+#             config["llm_provider"] = "openai"
+#             config["llm_model"] = "google/gemma-4-26b-a4b"
+#             config["api_key"] = "lm-studio"
+#             config["base_url"] = "http://127.0.0.1:1234/v1"
+#
+#             ta = TradingAgentsGraph(debug=True, config=config)
+#             _, decision = ta.propagate(symbol, date)
+#
+#             return Response({"success": True, "decision": decision})
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=500)
+
+class AIForecastView(APIView):
+    def post(self, request):
+        if not TRADING_AGENTS_READY:
+            return Response({"error": "Библиотека TradingAgents не установлена."}, status=500)
+
+        symbol = request.data.get('symbol', 'XAUUSD')
+        date = request.data.get('date')
+        forecast_type = request.data.get('type', 'macro')  # 'macro' или 'intraday'
+
+        try:
+            # Принудительно задаем переменные среды для библиотеки
+            os.environ["OPENAI_API_KEY"] = "lm-studio"
+            os.environ["OPENAI_BASE_URL"] = "http://127.0.0.1:1234/v1"
+
+            config = DEFAULT_CONFIG.copy()
+            config["llm_provider"] = "openai"
+            config["llm_model"] = "qwen2.5-7b"
+            config["api_key"] = "lm-studio"
+            config["base_url"] = "http://127.0.0.1:1234/v1"
+
+            # 👇 МАГИЯ: Управляем контекстом Агента 👇
+            if forecast_type == 'intraday':
+                # Для интрадея просим фокусироваться на краткосроке
+                config["system_prompt_override"] = (
+                    "You are a short-term Intraday Trading Analyst. "
+                    "Focus heavily on the most recent 3-5 days of price action, recent support/resistance, "
+                    "and short-term momentum. Ignore macro-economic cycles. "
+                    "Your goal is to provide a forecast for the next 2-4 hours."
+                )
+            else:
+                # Для макро оставляем стандартное (или задаем свое для свинга)
+                config["system_prompt_override"] = (
+                    "You are a Swing Trading Analyst. "
+                    "Focus on the macro trend over the last 30-45 days, key HTF levels, "
+                    "and major market structure shifts. "
+                    "Your goal is to provide a forecast for the next 1-3 days."
+                )
+
+            ta = TradingAgentsGraph(debug=True, config=config)
+            _, decision = ta.propagate(symbol, date)
+
+            return Response({"success": True, "decision": decision})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=500)
