@@ -17,3 +17,7 @@ knowledge_input/
 # Кэш питона
 __pycache__/
 *.pyc
+
+# Игнорируем локальные отчеты и PDF
+doc/pdf/
+*.pdf
