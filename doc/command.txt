@@ -6,8 +6,31 @@ python manage.py backup_db
 В папке проекта на диске D: автоматически появится папка backups,
 а внутри нее сжатый файл с датой (например, my_db_backup_2026-06-23_15-00-00.sql).
 
-
+example1
 git status
 git add .
 git commit -m "fix: resolve 403 Forbidden errors on API endpoints" -m "- Switched Playbook API requests from fetch to XMLHttpRequest to bypass browser extension interference - Implemented explicit CSRF token handling in templates and views - Updated CORS settings and CSRF_TRUSTED_ORIGINS - Optimized frontend auth check logic"
+git push
+
+
+example2
+git status
+git add .
+git commit -m "feat: core architecture upgrade - accounts, authors, tf-screenshots, and trade summaries" -m "- Backend & Database:
+  * Introduced \`TradeAccount\` and \`TradeAuthor\` relational models to decouple trade ownership and funding sources.
+  * Added \`account\`, \`author\` (ForeignKeys), and \`summary\` (TextField for post-trade reflections) to the \`Trade\` model.
+  * Implemented \`TradeAccountViewSet\` and \`TradeAuthorViewSet\` with updated API routing.
+  * Refactored \`add_manual\` and \`bulk_process\` endpoints to seamlessly handle new relational IDs and summary data.
+  * Fixed Django URL routing bug (urls.E004) by adjusting router registration order.
+
+- Frontend & UI:
+  * Profile: Built a management dashboard to dynamically CRUD trade accounts and authors.
+  * Inbox & Journal: Integrated relational dropdowns for manual trade creation, bulk processing, and the Trade Review modal.
+  * Analytics & Risk Audit: Completely overhauled the filtering engine to calculate global or entity-specific statistics based on selected Account/Author, replacing hardcoded exclusions.
+  * Backtest Station: Upgraded to support multiple localized screenshots per timeframe (stored in JSONField array \`tf_images\`).
+  * Fixed JS execution halt in \`inbox.html\` caused by a missing comma in the payload object.
+
+- Data Exporters:
+  * Updated the CSV/Excel exporter to include the new 'Summary' column.
+  * Upgraded Single and Bulk PDF templates to correctly render the post-trade summary block alongside the initial plan and multi-timeframe screenshots."
 git push

@@ -119,6 +119,9 @@
         {% for s in t.analysis_screens.all %}{% if s.timeframe == 'Общее' %}
             <div class="screen-block"><strong>Скриншот {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
         {% endif %}{% endfor %}
+        {% for s in t.analysis_screens.all %}{% if s.timeframe == 'Резюме' %}
+            <div class="screen-block" style="border-left-color: #28a745; background-color: #e8f5e9;"><strong>📝 {{ s.timeframe }}:</strong> {{ s.description|linebreaksbr }}<br>{% if s.image %}<img src="{{ s.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
 
         {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'D1' %}
             <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
@@ -154,6 +157,9 @@
 
         {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'Общее' or not r.timeframe %}
             <div class="mentor-block"><strong>Разнос RS ({{ r.timeframe|default:"Общее" }}):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
+        {% endif %}{% endfor %}
+        {% for r in t.mentor_reviews.all %}{% if r.timeframe == 'Резюме' %}
+            <div class="mentor-block"><strong>Разнос RS (📝 Резюме):</strong> {{ r.mentor_comment|linebreaksbr }}<br>{% if r.image %}<img src="{{ r.image.url }}" />{% endif %}</div>
         {% endif %}{% endfor %}
 
         {% if not forloop.last %}

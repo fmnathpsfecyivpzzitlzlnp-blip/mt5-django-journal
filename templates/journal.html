@@ -249,7 +249,7 @@ https://www.tradingview.com/x/oukD8T9m/
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h6 class="text-warning m-0">🤷‍♂️ Мой скриншот (Ручной)</h6>
                                 <select id="my-tf" class="form-select form-select-sm bg-dark text-warning border-secondary w-auto fw-bold">
-                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M30">M30</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option><option value="Вход">Вход</option>
+                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M30">M30</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option><option value="Вход">Вход</option><option value="Резюме">📝 Резюме (Итоги)</option>
                                 </select>
                             </div>
                             <div id="my-dropzone" tabindex="0" class="smart-dropzone p-3 mb-2 text-center rounded position-relative" style="border: 2px dashed #ffc107; outline: none; cursor: default;">
@@ -274,7 +274,7 @@ https://www.tradingview.com/x/oukD8T9m/
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h6 class="text-danger m-0">🔥 Скриншот от RS</h6>
                                 <select id="rs-tf" class="form-select form-select-sm bg-dark text-danger border-secondary w-auto fw-bold">
-                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M30">M30</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option>
+                                    <option value="Общее">Общее</option><option value="D1">D1</option><option value="H4">H4</option><option value="H1">H1</option><option value="M30">M30</option><option value="M15">M15</option><option value="M5">M5</option><option value="M1">M1</option><option value="Вход">Вход</option><option value="Резюме">📝 Резюме (Итоги)</option>
                                 </select>
                             </div>
                             <div id="rs-dropzone" tabindex="0" class="smart-dropzone-danger p-3 mb-2 text-center rounded position-relative" style="border: 2px dashed #dc3545; outline: none; cursor: default;">
@@ -747,7 +747,7 @@ https://www.tradingview.com/x/oukD8T9m/
         const res = await fetch(`${API_BASE}trades/${currentReviewTradeId}/`); const trade = await res.json();
         const myScreens = trade.analysis_screens || []; const rsReviews = trade.mentor_reviews || [];
         if (myScreens.length === 0 && rsReviews.length === 0) { feedContainer.innerHTML = '<div class="alert alert-dark text-center text-muted border-secondary mt-4">Лента пуста.</div>'; return; }
-        const order = ['Общее', 'D1', 'H4', 'H1', 'M30', 'M15', 'M5', 'M1', 'Вход']; let html = '';
+        const order = ['Общее', 'D1', 'H4', 'H1', 'M30', 'M15', 'M5', 'M1', 'Вход', 'Резюме']; let html = '';
         order.forEach(tf => {
             const myTfScreens = myScreens.filter(s => s.timeframe === tf); const rsTfReviews = rsReviews.filter(r => r.timeframe === tf || (!r.timeframe && tf === 'Общее'));
             if (myTfScreens.length > 0 || rsTfReviews.length > 0) {
@@ -787,8 +787,11 @@ https://www.tradingview.com/x/oukD8T9m/
         if (clean.startsWith('таймфрейм m1') || clean.startsWith('таймфрейм 1m') || clean === 'm1' || clean === '1m') return 'M1';
         if (clean.startsWith('таймфрейм d1') || clean.startsWith('таймфрейм 1d') || clean === 'd1' || clean === '1d') return 'D1';
 
-        if (clean.startsWith('общее') || clean.startsWith('вывод')) return 'Общее';
+        if (clean.startsWith('общее')) return 'Общее';
         if (clean.startsWith('вход')) return 'Вход';
+        if (clean.startsWith('резюме') || clean.startsWith('итог') || clean.startsWith('вывод')) return 'Резюме';
+
+        return null;
 
         return null;
     }
