@@ -6,32 +6,44 @@
     <div class="badge bg-dark border border-secondary p-2">Стиль: <span id="trader-style">--</span></div>
 </div>
 
-<div class="card shadow p-2 mb-4 border-secondary bg-dark">
-    <div class="row g-2">
-        <div class="col-md-2">
+<div class="card shadow p-3 mb-4 border-secondary bg-dark">
+    <div class="row g-2 mb-2">
+        <div class="col-md-3">
+            <select id="filt-account" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
+                <option value="all">💼 Все счета</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select id="filt-author" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
+                <option value="all">👤 Все авторы</option>
+            </select>
+        </div>
+        <div class="col-md-3">
             <select id="filt-execution" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
-                <option value="all">🤖/👤 Все сделки</option>
+                <option value="all">🤖/👤 Все типы исполнения</option>
                 <option value="auto">🤖 Только Роботы</option>
                 <option value="manual">👤 Только Ручные</option>
             </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <input type="text" id="filt-symbol" class="form-control bg-dark text-light border-secondary" placeholder="Ассет (XAUUSD)" oninput="applyFilters()">
         </div>
+    </div>
+    <div class="row g-2">
         <div class="col-md-3">
-            <input type="text" id="filt-magic" class="form-control bg-dark text-light border-secondary" placeholder="Советник (Magic)" oninput="applyFilters()">
+            <input type="text" id="filt-magic" class="form-control bg-dark text-light border-secondary" placeholder="Мэджик (ID советника)" oninput="applyFilters()">
         </div>
         <div class="col-md-3">
             <input type="text" id="filt-comment" class="form-control bg-dark text-light border-secondary" placeholder="Комментарий MT5" oninput="applyFilters()">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <select id="filt-period" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
                 <option value="all">📅 За все время</option>
                 <option value="month">🗓️ Последние 30 дней</option>
                 <option value="week">⏳ Последние 7 дней</option>
             </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <select id="filt-day" class="form-select bg-dark text-light border-secondary" onchange="applyFilters()">
                 <option value="all">📅 Любой день</option>
                 <option value="1">Понедельник</option>
@@ -126,75 +138,119 @@
     let allTrades = [];
 
     async function initPage() {
-    // 1. Загружаем и фильтруем базу (убираем Тесты и Чужие)
-    const res = await fetch(API_BASE + 'trades/?is_processed=true');
-    const rawTrades = await res.json();
-    allTrades = rawTrades.filter(t => t.entry_logic !== 'Тест/Ошибка' && t.entry_logic !== 'Чужая сделка');
+        const res = await fetch(API_BASE + 'trades/?is_processed=true');
+        const rawTrades = await res.json();
 
-    // 2. ВОССТАНАВЛИВАЕМ ФИЛЬТРЫ ИЗ ПАМЯТИ
-    if(localStorage.getItem('shared_exec')) document.getElementById('filt-execution').value = localStorage.getItem('shared_exec');
-    if(localStorage.getItem('shared_sym')) document.getElementById('filt-symbol').value = localStorage.getItem('shared_sym');
-    if(localStorage.getItem('shared_mag')) document.getElementById('filt-magic').value = localStorage.getItem('shared_mag');
-    if(localStorage.getItem('shared_com')) document.getElementById('filt-comment').value = localStorage.getItem('shared_com');
-    if(localStorage.getItem('shared_per')) document.getElementById('filt-period').value = localStorage.getItem('shared_per');
-    if(localStorage.getItem('shared_day')) document.getElementById('filt-day').value = localStorage.getItem('shared_day');
-    // 3. Запускаем отрисовку с учетом восстановленных фильтров
-    applyFilters();
-}
+        // 👇 ВАЖНО: Больше не блокируем "Чужая сделка", отсекаем только откровенные ошибки
+        allTrades = rawTrades.filter(t => t.entry_logic !== 'Тест/Ошибка');
 
-    function applyFilters() {
-    let exec = document.getElementById('filt-execution').value;
-    let sym = document.getElementById('filt-symbol').value.toLowerCase();
-    let mag = document.getElementById('filt-magic').value.toLowerCase();
-    let com = document.getElementById('filt-comment').value.toLowerCase();
-    let per = document.getElementById('filt-period').value;
-    // 👇 НОВОЕ: Получаем день недели
-    let dayFilter = document.getElementById('filt-day').value;
-
-    // 👇 СОХРАНЯЕМ ФИЛЬТРЫ В ПАМЯТЬ БРАУЗЕРА 👇
-    localStorage.setItem('shared_exec', exec);
-    localStorage.setItem('shared_sym', sym);
-    localStorage.setItem('shared_mag', mag);
-    localStorage.setItem('shared_com', com);
-    localStorage.setItem('shared_per', per);
-
-    let now = new Date();
-
-    let filtered = allTrades.filter(t => {
-        let sMatch = (t.symbol || '').toLowerCase().includes(sym);
-        let mMatch = (t.magic_number || '').toString().toLowerCase().includes(mag);
-        let cMatch = (t.mt5_comment || '').toLowerCase().includes(com);
-
-        let matchExec = true;
-        let isAuto = (t.magic_number && t.magic_number !== "0" && t.magic_number !== "");
-        if (exec === 'auto' && !isAuto) matchExec = false;
-        if (exec === 'manual' && isAuto) matchExec = false;
-
-        let dMatch = true;
-        let td = new Date(t.time);
-        if(per === 'month') { let m = new Date(); m.setDate(now.getDate() - 30); if(td < m) dMatch = false; }
-        else if(per === 'week') { let w = new Date(); w.setDate(now.getDate() - 7); if(td < w) dMatch = false; }
-
-                // 👇 НОВОЕ: Логика фильтрации по дню недели
-        let dayMatch = true;
-        if (dayFilter !== 'all') {
-            // В JS getDay() возвращает: 0 - Вс, 1 - Пн, 2 - Вт ... 6 - Сб
-            if (td.getDay() !== parseInt(dayFilter)) {
-                dayMatch = false;
-            }
+        // Подгружаем счета
+        const accRes = await fetch(API_BASE + 'accounts/');
+        if (accRes.ok) {
+            const accounts = await accRes.json();
+            let html = '<option value="all">💼 Все счета</option><option value="none">⚪ Без счета</option>';
+            accounts.forEach(a => html += `<option value="${a.id}">${a.name}</option>`);
+            document.getElementById('filt-account').innerHTML = html;
         }
 
-        // Возвращаем результат со всеми проверками
-        return sMatch && mMatch && cMatch && dMatch && matchExec && dayMatch;
-    });
+        // Подгружаем авторов
+        const authRes = await fetch(API_BASE + 'authors/');
+        if (authRes.ok) {
+            const authors = await authRes.json();
+            let html = '<option value="all">👤 Все авторы</option><option value="none">⚪ Мои системные (Без автора)</option>';
+            authors.forEach(a => html += `<option value="${a.id}">${a.name}</option>`);
+            document.getElementById('filt-author').innerHTML = html;
+        }
 
-    // Эти вызовы зависят от страницы (Аналитика или Аудит)
-    if (typeof updateTopStats === 'function') updateTopStats(filtered);
-    if (typeof calculatePropTracker === 'function') calculatePropTracker(filtered);
-    if (typeof renderHeatmap === 'function') renderHeatmap(filtered);
-    if (typeof updateCharts === 'function') updateCharts(filtered);
-    if (typeof calculateDynamicStats === 'function') calculateDynamicStats(filtered);
-    if (typeof renderWeekMatrix === 'function') renderWeekMatrix(filtered);
+        // Восстанавливаем фильтры из памяти
+        if(localStorage.getItem('shared_acc')) document.getElementById('filt-account').value = localStorage.getItem('shared_acc');
+        if(localStorage.getItem('shared_auth')) document.getElementById('filt-author').value = localStorage.getItem('shared_auth');
+        if(localStorage.getItem('shared_exec')) document.getElementById('filt-execution').value = localStorage.getItem('shared_exec');
+        if(localStorage.getItem('shared_sym')) document.getElementById('filt-symbol').value = localStorage.getItem('shared_sym');
+        if(localStorage.getItem('shared_mag')) document.getElementById('filt-magic').value = localStorage.getItem('shared_mag');
+        if(localStorage.getItem('shared_com')) document.getElementById('filt-comment').value = localStorage.getItem('shared_com');
+        if(localStorage.getItem('shared_per')) document.getElementById('filt-period').value = localStorage.getItem('shared_per');
+        if(localStorage.getItem('shared_day')) document.getElementById('filt-day').value = localStorage.getItem('shared_day');
+
+        applyFilters();
+    }
+
+    function applyFilters() {
+        let acc = document.getElementById('filt-account').value;
+        let auth = document.getElementById('filt-author').value;
+        let exec = document.getElementById('filt-execution').value;
+        let sym = document.getElementById('filt-symbol').value.toLowerCase();
+        let mag = document.getElementById('filt-magic').value.toLowerCase();
+        let com = document.getElementById('filt-comment').value.toLowerCase();
+        let per = document.getElementById('filt-period').value;
+        let dayFilter = document.getElementById('filt-day').value;
+
+        // Сохраняем в память
+        localStorage.setItem('shared_acc', acc);
+        localStorage.setItem('shared_auth', auth);
+        localStorage.setItem('shared_exec', exec);
+        localStorage.setItem('shared_sym', sym);
+        localStorage.setItem('shared_mag', mag);
+        localStorage.setItem('shared_com', com);
+        localStorage.setItem('shared_per', per);
+        localStorage.setItem('shared_day', dayFilter);
+
+        let now = new Date();
+
+        let filtered = allTrades.filter(t => {
+            // Фильтр по счету
+            let aMatch = true;
+            if (acc !== 'all') {
+                if (acc === 'none' && t.account !== null) aMatch = false;
+                if (acc !== 'none' && String(t.account) !== acc) aMatch = false;
+            }
+
+            // Фильтр по автору
+            let uMatch = true;
+            if (auth !== 'all') {
+                if (auth === 'none' && t.author !== null) uMatch = false;
+                if (auth !== 'none' && String(t.author) !== auth) uMatch = false;
+            }
+
+            let sMatch = (t.symbol || '').toLowerCase().includes(sym);
+            let mMatch = (t.magic_number || '').toString().toLowerCase().includes(mag);
+            let cMatch = (t.mt5_comment || '').toLowerCase().includes(com);
+
+            let matchExec = true;
+            let isAuto = (t.magic_number && t.magic_number !== "0" && t.magic_number !== "");
+            if (exec === 'auto' && !isAuto) matchExec = false;
+            if (exec === 'manual' && isAuto) matchExec = false;
+
+            let dMatch = true;
+            let td = new Date(t.time);
+            if(per === 'month') { let m = new Date(); m.setDate(now.getDate() - 30); if(td < m) dMatch = false; }
+            else if(per === 'week') { let w = new Date(); w.setDate(now.getDate() - 7); if(td < w) dMatch = false; }
+
+            let dayMatch = true;
+            if (dayFilter !== 'all') {
+                if (td.getDay() !== parseInt(dayFilter)) dayMatch = false;
+            }
+
+            return aMatch && uMatch && sMatch && mMatch && cMatch && dMatch && matchExec && dayMatch;
+        });
+
+        // 👇 Меняем заголовок в Квантовом Аудите, чтобы понимать, кого смотрим
+        const auditTitle = document.getElementById('audit-account-id');
+        if (auditTitle) {
+            const authName = auth !== 'all' ? document.getElementById('filt-author').options[document.getElementById('filt-author').selectedIndex].text : '';
+            const accName = acc !== 'all' ? document.getElementById('filt-account').options[document.getElementById('filt-account').selectedIndex].text : '';
+
+            if (auth === 'all' && acc === 'all') auditTitle.innerText = "Глобальная стата (Все)";
+            else auditTitle.innerText = `${authName} ${accName}`.trim();
+        }
+
+        // Обновляем графики
+        if (typeof updateTopStats === 'function') updateTopStats(filtered);
+        if (typeof calculatePropTracker === 'function') calculatePropTracker(filtered);
+        if (typeof renderHeatmap === 'function') renderHeatmap(filtered);
+        if (typeof updateCharts === 'function') updateCharts(filtered);
+        if (typeof calculateDynamicStats === 'function') calculateDynamicStats(filtered);
+        if (typeof renderWeekMatrix === 'function') renderWeekMatrix(filtered);
     }
 
     function calculateDynamicStats(trades) {

@@ -88,14 +88,11 @@
     </div>
 
     <div class="row g-4 mb-5">
-        <!-- ЛЕВАЯ ЧАСТЬ: ПРЯМОУГОЛЬНИКИ ТАЙМФРЕЙМОВ -->
         <div class="col-xl-8">
             <div class="row g-3" id="tf-grid">
-                <!-- Сюда JS рендерит блоки -->
-            </div>
+                </div>
         </div>
 
-        <!-- ПРАВАЯ ЧАСТЬ: ГЕНЕРАТОР И СКРИНШОТ -->
         <div class="col-xl-4 d-flex flex-column gap-3">
             <div class="card shadow border-info bg-dark flex-grow-1">
                 <div class="card-header bg-black border-info py-2 fw-bold text-info d-flex justify-content-between align-items-center">
@@ -108,7 +105,7 @@
             </div>
 
             <div class="card shadow border-secondary bg-dark">
-                <div class="card-header bg-black border-secondary py-2 small fw-bold text-secondary">ВСТАВКА ОБЩЕГО СКРИНШОТА</div>
+                <div class="card-header bg-black border-secondary py-2 small fw-bold text-secondary">ОБЩИЙ ИТОГ / PnL (Опционально)</div>
                 <div class="card-body p-2 d-flex flex-column">
                     <div id="bt-dropzone" tabindex="0" class="smart-dropzone flex-grow-1 d-flex flex-column justify-content-center align-items-center p-3 text-center rounded position-relative outline-none">
                         <span id="bt-drop-text" class="text-muted small">
@@ -125,19 +122,14 @@
         </div>
     </div>
 
-    <!-- ЛЕНТА СОХРАНЕННЫХ СДЕЛОК ЗА ДЕНЬ -->
     <h5 class="text-light border-bottom border-secondary pb-2 mb-3 mt-5">📜 История сделок за выбранный день</h5>
     <div id="daily-feed" class="mb-5">
-        <!-- Сюда подгружаются сделки из БД -->
-    </div>
+        </div>
 </div>
 
-<!-- НЕВИДИМАЯ ЗОНА ТОЛЬКО ДЛЯ ПЕЧАТИ (PDF) -->
 <div id="print-area">
-    <!-- Сюда JS рендерит чистый черно-белый отчет для PDF -->
-</div>
+    </div>
 
-<!-- МОДАЛКА ДЛЯ ВЫБОРА ДАТ ЭКСПОРТА -->
 <div class="modal fade" id="exportModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark border-warning">
@@ -200,7 +192,7 @@
         const grid = document.getElementById('tf-grid');
         const html = `
             <div class="col-md-6 mb-2 tf-card-container">
-                <div class="tf-card h-100" data-tf="${tfName}">
+                <div class="tf-card h-100 d-flex flex-column" data-tf="${tfName}">
                     <div class="tf-header">
                         <span>${tfName} Таймфрейм</span>
                         <div>
@@ -208,8 +200,8 @@
                             <span class="badge bg-danger" style="font-size:0.6rem;cursor:pointer;" onclick="this.closest('.tf-card-container').remove(); generateText();">✖</span>
                         </div>
                     </div>
-                    <div class="card-body p-2 pb-3">
-                        <div class="tf-section-title">Направление / Тренд</div>
+                    <div class="card-body p-2 pb-2 flex-grow-1">
+                        <div class="tf-section-title mt-0">Направление / Тренд</div>
                         <span class="tf-btn" onclick="toggleBtn(this)">📈 Лонг</span>
                         <span class="tf-btn" onclick="toggleBtn(this)">📉 Шорт</span>
                         <span class="tf-btn" onclick="toggleBtn(this)">↔️ Боковик</span>
@@ -228,13 +220,96 @@
                         <span class="tf-btn" onclick="toggleBtn(this)">🧱 OB</span>
 
                         <div class="tf-section-title mt-2">Заметки по ТФ</div>
-                        <textarea class="form-control bg-dark text-info border-secondary tf-custom-comment" rows="1" placeholder="Ручной комментарий..." oninput="generateText()" style="font-size: 0.8rem; resize: none;"></textarea>
+                        <textarea class="form-control bg-dark text-info border-secondary tf-custom-comment mb-2" rows="1" placeholder="Ручной комментарий..." oninput="generateText()" style="font-size: 0.8rem; resize: none;"></textarea>
                     </div>
+                    
+                    <div class="p-2 border-top border-secondary bg-black" style="border-radius: 0 0 8px 8px;">
+                        <div class="tf-dropzone" tabindex="0" onpaste="handleTfPaste(event, this)" style="outline: none;">
+                            <div class="d-flex align-items-center gap-1 tf-input-group">
+                                <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary tf-url-input" placeholder="Ссылка (TV) или Ctrl+V..." oninput="handleTfUrl(this)">
+                                <input type="file" class="d-none tf-file-input" accept="image/*" onchange="handleTfFile(this)">
+                            </div>
+                            <div class="tf-preview-container d-none position-relative mt-2 text-center">
+                                <img src="" class="img-fluid rounded border border-info tf-preview-img" style="max-height: 140px; object-fit: contain;">
+                                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 py-0 px-1" onclick="clearTfImage(this, event)">✖</button>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         `;
         grid.insertAdjacentHTML('beforeend', html);
     }
+
+    // --- ЛОГИКА ИЗОБРАЖЕНИЙ ПО ТАЙМФРЕЙМАМ ---
+    function handleTfPaste(e, dropzone) {
+        const items = (e.clipboardData || window.clipboardData).items;
+        for (let i of items) {
+            if (i.kind === 'file' && i.type.startsWith('image/')) {
+                e.preventDefault();
+                compressAndSetTfPreview(i.getAsFile(), dropzone);
+                break;
+            }
+        }
+    }
+
+    function handleTfUrl(input) {
+        const val = input.value.trim();
+        if (val.includes('tradingview.com/x/')) {
+            const dropzone = input.closest('.tf-dropzone');
+            setTfPreview(val, dropzone);
+        }
+    }
+
+    function handleTfFile(input) {
+        if (input.files && input.files[0]) {
+            const dropzone = input.closest('.tf-dropzone');
+            compressAndSetTfPreview(input.files[0], dropzone);
+        }
+    }
+
+    function compressAndSetTfPreview(file, dropzone) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function(e) {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const maxW = 1280, maxH = 720;
+                let w = img.width, h = img.height;
+                if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+                if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+                canvas.width = w; canvas.height = h;
+                ctx.drawImage(img, 0, 0, w, h);
+                
+                const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                setTfPreview(base64, dropzone);
+            }
+        };
+    }
+
+    function setTfPreview(src, dropzone) {
+        dropzone.querySelector('.tf-input-group').classList.add('d-none');
+        dropzone.querySelector('.tf-preview-container').classList.remove('d-none');
+        dropzone.querySelector('.tf-preview-img').src = src;
+        dropzone.dataset.imageSrc = src; // Сохраняем src в data-атрибут
+    }
+
+    function clearTfImage(btn, e) {
+        e.stopPropagation();
+        const dropzone = btn.closest('.tf-dropzone');
+        dropzone.dataset.imageSrc = "";
+        dropzone.querySelector('.tf-file-input').value = "";
+        dropzone.querySelector('.tf-url-input').value = "";
+        
+        dropzone.querySelector('.tf-preview-container').classList.add('d-none');
+        dropzone.querySelector('.tf-input-group').classList.remove('d-none');
+        dropzone.querySelector('.tf-preview-img').src = "";
+    }
+
 
     // --- 2. ЛОГИКА КНОПОК И ГЕНЕРАТОР ТЕКСТА ---
     function toggleBtn(btn) { btn.classList.toggle('active'); generateText(); }
@@ -244,12 +319,18 @@
         card.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
         let textarea = card.querySelector('.tf-custom-comment');
         if (textarea) textarea.value = '';
+        // Очищаем картинку тоже
+        let clearImgBtn = card.querySelector('.tf-preview-container button');
+        if(clearImgBtn && !clearImgBtn.closest('.d-none')) clearImgBtn.click();
         generateText();
     }
 
     function clearAllCards() {
         document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tf-custom-comment').forEach(t => t.value = '');
+        document.querySelectorAll('.tf-preview-container button').forEach(btn => {
+            if(!btn.closest('.d-none')) btn.click();
+        });
         generateText();
     }
 
@@ -283,7 +364,7 @@
         if(text) { navigator.clipboard.writeText(text); alert("Анализ скопирован!"); }
     }
 
-    // --- 3. СЖАТИЕ КАРТИНКИ (BASE64) ---
+    // --- 3. СЖАТИЕ ГЛОБАЛЬНОЙ КАРТИНКИ (BASE64) ---
     function setupImageDropzone() {
         const dropzone = document.getElementById(`bt-dropzone`);
         const fileInput = document.getElementById(`bt-file-input`);
@@ -366,11 +447,23 @@
             }
             let setups = gridData.setups || [];
 
+            // 👇 Собираем картинки со всех карточек ТФ
+            let tfImages = [];
+            document.querySelectorAll('.tf-card').forEach(card => {
+                let tfName = card.getAttribute('data-tf');
+                let dropzone = card.querySelector('.tf-dropzone');
+                let imgSrc = dropzone ? dropzone.dataset.imageSrc : null;
+                if (imgSrc) {
+                    tfImages.push({ tf: tfName, src: imgSrc });
+                }
+            });
+
             setups.push({
                 id: Date.now(),
                 time: timeVal.replace('T', ' '),
                 text: textVal || "Анализ не добавлен",
-                image: currentImageBase64 || ""
+                image: currentImageBase64 || "",
+                tf_images: tfImages // 👈 Добавляем новый массив
             });
 
             const fd = new FormData();
@@ -451,21 +544,52 @@
             let printHtml = `<h2 style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 30px;">Торговый Отчет: ${dateOnly}</h2>`;
 
             setups.forEach((setup, index) => {
-                let imgTag = setup.image ? `<img src="${setup.image}">` : '';
+                
+                // Формируем HTML для картинок в ленте на экране
+                let imgTagFeed = '';
+                if (setup.tf_images && setup.tf_images.length > 0) {
+                    setup.tf_images.forEach(img => {
+                        imgTagFeed += `
+                        <div class="mt-3">
+                            <span class="badge bg-info text-dark mb-1">Таймфрейм ${img.tf}</span><br>
+                            <img src="${img.src}" class="img-fluid rounded border border-secondary shadow-sm">
+                        </div>`;
+                    });
+                }
+                // Старая глобальная картинка (или скрин итога)
+                if (setup.image) {
+                    imgTagFeed += `
+                    <div class="mt-3">
+                        <span class="badge bg-secondary mb-1">Итог / Общий скрин</span><br>
+                        <img src="${setup.image}" class="img-fluid rounded border border-secondary shadow-sm">
+                    </div>`;
+                }
 
                 feedHtml += `
                 <div class="feed-item position-relative shadow-sm">
                     <button class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2 py-0 px-2" onclick="deleteSetup(${setup.id}, '${dateOnly}')">✖</button>
                     <div class="feed-text fw-bold text-info mb-2">Сделка #${index + 1} (${setup.time})</div>
                     <div class="feed-text">${setup.text}</div>
-                    ${imgTag}
+                    ${imgTagFeed}
                 </div>`;
+
+
+                // Формируем HTML для PDF (Print)
+                let imgTagPrint = '';
+                if (setup.tf_images && setup.tf_images.length > 0) {
+                    setup.tf_images.forEach(img => {
+                        imgTagPrint += `<div style="margin-top: 15px;"><b>Скриншот ТФ ${img.tf}:</b><br><img src="${img.src}"></div>`;
+                    });
+                }
+                if (setup.image) {
+                    imgTagPrint += `<div style="margin-top: 15px;"><b>Итог / Общий скрин:</b><br><img src="${setup.image}"></div>`;
+                }
 
                 printHtml += `
                 <div class="print-item">
                     <div class="print-item-header">Сделка #${index + 1} | Время: ${setup.time}</div>
                     <div class="print-item-text">${setup.text}</div>
-                    ${imgTag}
+                    ${imgTagPrint}
                 </div>`;
             });
 
@@ -560,7 +684,6 @@
                 let dateOnly = `${yyyy}-${mm}-${dd}`;
 
                 try {
-                    // Запрашиваем конкретный день. Это 100% работает, так как мы используем рабочий API
                     let res = await fetch(`/backtest_api/?date=${dateOnly}`, {
                         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                     });
@@ -580,12 +703,23 @@
                                 printHtml += `<div class="print-day-header">🗓️ ИТОГИ ДНЯ: ${dateOnly}</div>`;
 
                                 setups.forEach((setup, index) => {
-                                    let imgTag = setup.image ? `<img src="${setup.image}">` : '';
+                                    
+                                    // Логика картинок для PDF (в цикле по дням)
+                                    let imgTagPrint = '';
+                                    if (setup.tf_images && setup.tf_images.length > 0) {
+                                        setup.tf_images.forEach(img => {
+                                            imgTagPrint += `<div style="margin-top: 15px;"><b>Скриншот ТФ ${img.tf}:</b><br><img src="${img.src}"></div>`;
+                                        });
+                                    }
+                                    if (setup.image) {
+                                        imgTagPrint += `<div style="margin-top: 15px;"><b>Итог / Общий скрин:</b><br><img src="${setup.image}"></div>`;
+                                    }
+
                                     printHtml += `
                                     <div class="print-item">
                                         <div class="print-item-header">Сделка #${index + 1} | Время: ${setup.time}</div>
                                         <div class="print-item-text">${setup.text}</div>
-                                        ${imgTag}
+                                        ${imgTagPrint}
                                     </div>`;
                                 });
                             }
@@ -595,7 +729,6 @@
                     console.error(`Ошибка при загрузке даты ${dateOnly}:`, fetchErr);
                 }
 
-                // Переходим к следующему дню
                 curr.setDate(curr.getDate() + 1);
                 daysCount++;
             }
@@ -605,7 +738,6 @@
             } else {
                 document.getElementById('print-area').innerHTML = printHtml;
 
-                // Закрываем модалку Bootstrap
                 let modalEl = document.getElementById('exportModal');
                 let modalInstance = bootstrap.Modal.getInstance(modalEl);
                 if (modalInstance) modalInstance.hide();

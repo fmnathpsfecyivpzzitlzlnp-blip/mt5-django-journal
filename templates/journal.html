@@ -132,10 +132,18 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <div class="mb-3">
-                    <label class="small text-secondary mb-1">Автор сделки (Например: RS, Регина)</label>
-                    <input type="text" id="manual-author" class="form-control bg-dark text-light border-secondary" placeholder="RS">
-                </div>
+                <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Автор сделки</label>
+                        <select id="manual-author" class="form-select bg-dark text-light border-secondary">
+                            <option value="">-- Выбрать --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Торговый счет</label>
+                        <select id="manual-account" class="form-select bg-dark text-light border-secondary">
+                            <option value="">-- Выбрать --</option>
+                        </select>
+                    </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
                         <label class="small text-secondary mb-1">Актив</label>
@@ -336,6 +344,8 @@ https://www.tradingview.com/x/oukD8T9m/
     let fileState = { 'my': null, 'rs': null };
     let currentSort = { column: 'time', asc: false };
     let customTiltQuotes = [];
+    let globalAccounts = [];
+    let globalAuthors = [];
 
     document.addEventListener("DOMContentLoaded", () => {
         reviewModal = new bootstrap.Modal(document.getElementById('reviewModal'));
@@ -436,6 +446,7 @@ https://www.tradingview.com/x/oukD8T9m/
         if(localStorage.getItem('shared_com')) document.getElementById('filter-comment').value = localStorage.getItem('shared_com');
 
         applyFilters();
+        loadAccountsAndAuthors();
     }
 
     function renderStats(data) {}
@@ -581,11 +592,15 @@ https://www.tradingview.com/x/oukD8T9m/
             if ((t.mentor_reviews && t.mentor_reviews.length > 0) || (t.analysis_screens && t.analysis_screens.length > 0)) {
                 pdfBtn = `<a href="/api/trades/${t.id}/export_pdf/" target="_blank" class="btn btn-sm btn-outline-light" title="Скачать PDF отчет">📄 PDF</a>`;
             }
+            const authorBadge = t.author_name ? `<span class="badge bg-warning text-dark ms-1" title="Автор">👤 ${t.author_name}</span>` : '';
+            const accountBadge = t.account_name ? `<span class="badge bg-success bg-opacity-25 text-success ms-1" title="Счет">💼 ${t.account_name}</span>` : '';
+
 
             html += `<tr style="${rowOpacity}">
                 <td class="ps-3"><input type="checkbox" class="form-check-input bg-dark border-secondary trade-cb" value="${t.id}"></td>
                 <td class="small">${finalDate}<br><span class="text-muted">#${t.ticket}</span></td>
-                <td>${tBadge} <strong class="text-light">${t.symbol || ''}</strong><br><small class="text-muted">Vol: ${t.volume}</small></td>
+                <td>${tBadge} <strong class="text-light">${t.symbol || ''}</strong><br><small class="text-muted">Vol: ${t.volume}</small><br>${accountBadge}${authorBadge}</td>
+
                 <td><span class="${pClass} fw-bold fs-5">$${t.profit}</span></td>
                 <td>${magicInfo}</td>
                 <td>${commentInfo}</td>
@@ -615,6 +630,19 @@ https://www.tradingview.com/x/oukD8T9m/
         const extraFactors = factors.filter(f => !stdFactors.includes(f)).join(', ');
         const isSel = (val, field) => (t[field] === val) ? 'selected' : '';
 
+        // 👇 1. ДОБАВЬ ЭТИ ДВЕ ФУНКЦИИ-ГЕНЕРАТОРЫ:
+        const getAccOpts = (currentId) => {
+            let opts = '<option value="">-- Без счета --</option>';
+            globalAccounts.forEach(a => opts += `<option value="${a.id}" ${a.id == currentId ? 'selected' : ''}>💼 ${a.name}</option>`);
+            return opts;
+        };
+        const getAuthOpts = (currentId) => {
+            let opts = '<option value="">-- Без автора --</option>';
+            globalAuthors.forEach(a => opts += `<option value="${a.id}" ${a.id == currentId ? 'selected' : ''}>👤 ${a.name}</option>`);
+            return opts;
+        };
+
+        // 👇 2. ОБНОВИ ПЕРЕМЕННУЮ topContext (добавлен новый row g-2 mb-3):
         let topContext = `
             <div class="card bg-info bg-opacity-10 border-info p-3 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
@@ -627,6 +655,13 @@ https://www.tradingview.com/x/oukD8T9m/
                         <button class="btn btn-sm btn-info fw-bold text-dark" onclick="updateTradeMeta(event, ${t.id})">💾 Сохранить</button>
                     </div>
                 </div>
+
+                <!-- НОВАЯ СТРОКА ДЛЯ СЧЕТА И АВТОРА -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6"><label class="small text-secondary mb-1">Привязка к счету</label><select id="modal-account" class="form-select form-select-sm bg-dark text-light border-secondary">${getAccOpts(t.account)}</select></div>
+                    <div class="col-md-6"><label class="small text-secondary mb-1">Привязка к автору</label><select id="modal-author" class="form-select form-select-sm bg-dark text-light border-secondary">${getAuthOpts(t.author)}</select></div>
+                </div>
+
                 <div class="row g-2 mb-3">
                     <div class="col-md-3"><label class="small text-secondary mb-1">Тренд</label><select id="modal-trend" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="Лонговый" ${isSel('Лонговый', 'market_trend')}>📈 Лонг</option><option value="Шортовый" ${isSel('Шортовый', 'market_trend')}>📉 Шорт</option><option value="Боковик" ${isSel('Боковик', 'market_trend')}>↔️ Боковик</option></select></div>
                     <div class="col-md-3"><label class="small text-secondary mb-1">Логика</label><select id="modal-logic" class="form-select form-select-sm bg-dark text-light border-secondary"><option value="">--</option><option value="По тренду" ${isSel('По тренду', 'entry_logic')}>✅ По тренду</option><option value="Разворот" ${isSel('Разворот', 'entry_logic')}>🔄 Разворот</option><option value="От нижней границы" ${isSel('От нижней границы', 'entry_logic')}>📈 От нижней границы</option><option value="От верхней границы" ${isSel('От верхней границы', 'entry_logic')}>📉 От верхней границы</option><option value="Тест/Ошибка" ${isSel('Тест/Ошибка', 'entry_logic')}>🔧 Тест</option><option value="Чужая сделка" ${isSel('Чужая сделка', 'entry_logic')}>👽 Чужая</option></select></div>
@@ -635,7 +670,7 @@ https://www.tradingview.com/x/oukD8T9m/
                 </div>
                 <div class="row g-3"><div class="col-md-6"><label class="small text-light fw-bold mb-1">Факторы:</label><div class="d-flex flex-wrap gap-2 mb-2 p-2 bg-dark rounded border border-secondary">
                     ${stdFactors.map(f => `<div class="form-check"><input class="form-check-input modal-conf-cb" type="checkbox" value="${f}" ${isChecked(f)}><label class="form-check-label small text-light">${f}</label></div>`).join('')}
-                </div><input type="text" id="modal-conf-extra" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Свой..." value="${extraFactors}"></div><div class="col-md-6 border-start border-secondary"><label class="small text-light fw-bold mb-1">План:</label><textarea id="modal-trade-comment" class="form-control form-control-sm bg-dark text-light border-secondary h-75">${t.comment || ''}</textarea></div></div>
+                </div><input type="text" id="modal-conf-extra" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Свой..." value="${extraFactors}"></div><div class="col-md-6 border-start border-secondary"><label class="small text-light fw-bold mb-1">План:</label><textarea id="modal-trade-comment" class="form-control form-control-sm bg-dark text-light border-secondary mb-2" style="height: 100px;">${t.comment || ''}</textarea><label class="small text-light fw-bold mb-1">Резюме (Итоги / Выводы):</label><textarea id="modal-trade-summary" class="form-control form-control-sm bg-dark text-light border-secondary" style="height: 100px;" placeholder="Что было по факту? Какие уроки?">${t.summary || ''}</textarea></div></div>
             </div>`;
 
         document.getElementById('trade-context-header').innerHTML = topContext;
@@ -678,12 +713,15 @@ https://www.tradingview.com/x/oukD8T9m/
         const fd = new FormData();
         fd.append('confluence_factors', finalFactors);
         fd.append('comment', document.getElementById('modal-trade-comment').value);
+        fd.append('summary', document.getElementById('modal-trade-summary').value);
         fd.append('market_trend', document.getElementById('modal-trend').value);
         fd.append('entry_logic', document.getElementById('modal-logic').value);
         fd.append('psychology', document.getElementById('modal-psy').value);
         fd.append('setup_grade', document.getElementById('modal-grade').value);
         fd.append('strategy_name', '');
         fd.append('profit', document.getElementById('modal-trade-profit').value);
+        fd.append('account', document.getElementById('modal-account').value);
+        fd.append('author', document.getElementById('modal-author').value);
 
         const res = await fetch(`${API_BASE}trades/${id}/`, {
             method: 'PATCH',
@@ -976,7 +1014,7 @@ https://www.tradingview.com/x/oukD8T9m/
         if (dataToExport.length === 0) return alert("Нет данных для экспорта!");
 
         // Добавляем колонку "Качество исполнения"
-        let csvContent = "\uFEFFТикет;Дата;Актив;Тип;Объем;PnL;Magic;Тренд;Логика;Психология;Ранг;Исполнение\n";
+        let csvContent = "\uFEFFТикет;Дата;Актив;Тип;Объем;PnL;Magic;Тренд;Логика;Психология;Ранг;Исполнение;Резюме\n";
 
         dataToExport.forEach(t => {
             const d = new Date(t.time);
@@ -995,7 +1033,7 @@ https://www.tradingview.com/x/oukD8T9m/
             // Защита от пустых значений
             const safe = (val) => (val || '').toString().replace(/;/g, ',');
 
-            csvContent += `${safe(t.ticket)};${dateStr};${safe(t.symbol)};${safe(t.type)};${safe(t.volume).replace('.', ',')};${safe(t.profit).replace('.', ',')};${safe(t.magic_number)};${safe(t.market_trend)};${safe(t.entry_logic)};${safe(t.psychology)};${safe(t.setup_grade)};${executionQuality}\n`;
+            csvContent += `${safe(t.ticket)};${dateStr};${safe(t.symbol)};${safe(t.type)};${safe(t.volume).replace('.', ',')};${safe(t.profit).replace('.', ',')};${safe(t.magic_number)};${safe(t.market_trend)};${safe(t.entry_logic)};${safe(t.psychology)};${safe(t.setup_grade)};${executionQuality};${safe(t.summary)}\n`;
         });
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1153,7 +1191,8 @@ https://www.tradingview.com/x/oukD8T9m/
     }
     async function createManualTrade() {
             const payload = {
-                author: document.getElementById('manual-author').value,
+                author_id: document.getElementById('manual-author').value,
+                account_id: document.getElementById('manual-account').value,
                 symbol: document.getElementById('manual-symbol').value,
                 type: document.getElementById('manual-type').value,
                 profit: document.getElementById('manual-profit').value,
@@ -1191,6 +1230,23 @@ https://www.tradingview.com/x/oukD8T9m/
             } catch (e) {
                 console.error("Ошибка сети:", e);
                 alert("Ошибка сети. Проверьте консоль браузера.");
+            }
+        }
+        async function loadAccountsAndAuthors() {
+            const accRes = await fetch(API_BASE + 'accounts/');
+            if (accRes.ok) {
+                globalAccounts = await accRes.json(); // 👈 Сохраняем в память
+                let html = '<option value="">-- Выбрать --</option>';
+                globalAccounts.forEach(a => html += `<option value="${a.id}">💼 ${a.name}</option>`);
+                if(document.getElementById('manual-account')) document.getElementById('manual-account').innerHTML = html;
+            }
+
+            const authRes = await fetch(API_BASE + 'authors/');
+            if (authRes.ok) {
+                globalAuthors = await authRes.json(); // 👈 Сохраняем в память
+                let html = '<option value="">-- Выбрать --</option>';
+                globalAuthors.forEach(a => html += `<option value="${a.id}">👤 ${a.name}</option>`);
+                if(document.getElementById('manual-author')) document.getElementById('manual-author').innerHTML = html;
             }
         }
 </script>

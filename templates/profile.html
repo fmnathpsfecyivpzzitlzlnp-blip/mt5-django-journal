@@ -18,6 +18,42 @@
                 <li class="list-group-item bg-dark text-center text-muted small">Загрузка...</li>
             </ul>
         </div>
+        <!-- 👇 НОВЫЙ БЛОК: ТОРГОВЫЕ СЧЕТА 👇 -->
+        <div class="card shadow p-4 mb-4 border-success bg-dark">
+            <h5 class="text-success mb-2">💼 Торговые счета / Пропы</h5>
+            <p class="text-secondary small mb-3">Счета, на которых торгуешь ты или твои роботы (например: FTMO 100k, Личный счет, Робот-Азия).</p>
+
+            <div class="row g-2 mb-3">
+                <div class="col-md-5">
+                    <input type="text" id="new-account-name" class="form-control bg-black text-light border-success" placeholder="Название (FTMO 100k)">
+                </div>
+                <div class="col-md-5">
+                    <input type="text" id="new-account-desc" class="form-control bg-black text-light border-success" placeholder="Описание (опционально)">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-success fw-bold w-100" onclick="addAccount()">➕</button>
+                </div>
+            </div>
+
+            <ul class="list-group list-group-flush rounded border border-secondary" id="accounts-list">
+                <li class="list-group-item bg-dark text-center text-muted small">Загрузка...</li>
+            </ul>
+        </div>
+
+        <!-- 👇 НОВЫЙ БЛОК: АВТОРЫ / ТРЕЙДЕРЫ 👇 -->
+        <div class="card shadow p-4 mb-4 border-warning bg-dark">
+            <h5 class="text-warning mb-2">👤 Авторы сделок (Для разборов)</h5>
+            <p class="text-secondary small mb-3">Чьи сделки ты разбираешь (например: Я, Юра, Регина).</p>
+
+            <div class="input-group mb-3 shadow-sm">
+                <input type="text" id="new-author-name" class="form-control bg-black text-light border-warning" placeholder="Имя автора (например: Юра)">
+                <button class="btn btn-warning fw-bold text-dark" onclick="addAuthor()">Добавить</button>
+            </div>
+
+            <ul class="list-group list-group-flush rounded border border-secondary" id="authors-list">
+                <li class="list-group-item bg-dark text-center text-muted small">Загрузка...</li>
+            </ul>
+        </div>
 
         <div class="card shadow p-4 mb-4 bg-dark border-secondary">
             <h5 class="text-success mb-3">Временные настройки</h5>
@@ -64,6 +100,8 @@
         document.getElementById('settings-tz').value = localStorage.getItem('user_tz_offset') || "+3";
         document.getElementById('broker-tz').value = localStorage.getItem('broker_tz_offset') || "3";
         loadTiltQuotes();
+        loadAccounts();
+        loadAuthors();
     });
 
     function saveProfile() {
@@ -123,6 +161,94 @@
         if(confirm('Точно удалить эту фразу?')) {
             await fetch(API_BASE + `rules/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
             loadTiltQuotes();
+        }
+    }
+    // --- ЛОГИКА СЧЕТОВ ---
+    async function loadAccounts() {
+        const res = await fetch(API_BASE + 'accounts/');
+        if (res.ok) {
+            const accounts = await res.json();
+            let html = '';
+            if (accounts.length === 0) {
+                html = '<li class="list-group-item bg-black text-muted small border-secondary text-center py-3">Нет добавленных счетов.</li>';
+            } else {
+                accounts.forEach(acc => {
+                    const desc = acc.description ? `<br><small class="text-muted">${acc.description}</small>` : '';
+                    html += `
+                    <li class="list-group-item bg-black text-light border-secondary d-flex justify-content-between align-items-center">
+                        <div><strong class="text-success">${acc.name}</strong>${desc}</div>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-3" onclick="deleteAccount(${acc.id})">✖</button>
+                    </li>`;
+                });
+            }
+            document.getElementById('accounts-list').innerHTML = html;
+        }
+    }
+
+    async function addAccount() {
+        const name = document.getElementById('new-account-name').value.trim();
+        const desc = document.getElementById('new-account-desc').value.trim();
+        if (!name) return alert("Введите название счета!");
+
+        const res = await fetch(API_BASE + 'accounts/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ name: name, description: desc })
+        });
+        if (res.ok) {
+            document.getElementById('new-account-name').value = '';
+            document.getElementById('new-account-desc').value = '';
+            loadAccounts();
+        }
+    }
+
+    async function deleteAccount(id) {
+        if(confirm('Точно удалить этот счет? (Сделки останутся, но потеряют привязку к нему)')) {
+            await fetch(API_BASE + `accounts/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            loadAccounts();
+        }
+    }
+
+    // --- ЛОГИКА АВТОРОВ ---
+    async function loadAuthors() {
+        const res = await fetch(API_BASE + 'authors/');
+        if (res.ok) {
+            const authors = await res.json();
+            let html = '';
+            if (authors.length === 0) {
+                html = '<li class="list-group-item bg-black text-muted small border-secondary text-center py-3">Авторов пока нет.</li>';
+            } else {
+                authors.forEach(auth => {
+                    html += `
+                    <li class="list-group-item bg-black text-light border-secondary d-flex justify-content-between align-items-center">
+                        <strong class="text-warning">${auth.name}</strong>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-3" onclick="deleteAuthor(${auth.id})">✖</button>
+                    </li>`;
+                });
+            }
+            document.getElementById('authors-list').innerHTML = html;
+        }
+    }
+
+    async function addAuthor() {
+        const name = document.getElementById('new-author-name').value.trim();
+        if (!name) return alert("Введите имя автора!");
+
+        const res = await fetch(API_BASE + 'authors/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ name: name })
+        });
+        if (res.ok) {
+            document.getElementById('new-author-name').value = '';
+            loadAuthors();
+        }
+    }
+
+    async function deleteAuthor(id) {
+        if(confirm('Точно удалить этого автора? (Его сделки останутся в базе)')) {
+            await fetch(API_BASE + `authors/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') } });
+            loadAuthors();
         }
     }
 </script>

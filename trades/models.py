@@ -2,6 +2,22 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import JSONField
 
+class TradeAccount(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField("Название счета", max_length=100)
+    description = models.CharField("Описание", max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
+
+class TradeAuthor(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField("Имя трейдера/автора", max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
 
 class Trade(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
@@ -27,6 +43,7 @@ class Trade(models.Model):
     confluence_factors = models.CharField(max_length=255, blank=True, null=True)
 
     comment = models.TextField(blank=True, null=True)
+    summary = models.TextField("Резюме к сделке", blank=True, null=True)
     psychology = models.CharField(max_length=100, blank=True, null=True)
     is_processed = models.BooleanField(default=False)
 
@@ -44,6 +61,8 @@ class Trade(models.Model):
     # 👇 НОВЫЕ ПОЛЯ ДЛЯ MT5 👇
     magic_number = models.CharField("Magic Number", max_length=50, blank=True, null=True)
     mt5_comment = models.CharField("MT5 Комментарий", max_length=255, blank=True, null=True)
+    account = models.ForeignKey(TradeAccount, on_delete=models.SET_NULL, null=True, blank=True)
+    author = models.ForeignKey(TradeAuthor, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"{self.ticket} - {self.symbol}"

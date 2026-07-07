@@ -12,6 +12,8 @@ router.register(r'playbook', PlaybookViewSet, basename='playbook')
 router.register(r'rules', TradingRuleViewSet, basename='rules')
 router.register(r'faq_topics', views.FAQTopicViewSet, basename='faq-topics')
 router.register(r'faq_blocks', views.FAQBlockViewSet, basename='faq-blocks')
+router.register(r'accounts', views.TradeAccountViewSet, basename='accounts')
+router.register(r'authors', views.TradeAuthorViewSet, basename='authors')
 
 urlpatterns = [
     path('', include(router.urls)),

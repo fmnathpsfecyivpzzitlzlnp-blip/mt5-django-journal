@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, TradingRule, FAQBlock, FAQTopic, AnswerChoice, \
-    Question, Quiz
+    Question, Quiz, TradeAccount, TradeAuthor
 
 
 class TradeScreenshotSerializer(serializers.ModelSerializer):
@@ -63,3 +63,31 @@ class QuizSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'description', 'questions_count']
     def get_questions_count(self, obj):
         return obj.questions.count()
+
+
+class TradeAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TradeAccount
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at']
+
+
+class TradeAuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TradeAuthor
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at']
+
+
+# Обнови TradeSerializer:
+class TradeSerializer(serializers.ModelSerializer):
+    analysis_screens = TradeScreenshotSerializer(many=True, read_only=True)
+    mentor_reviews = ReviewStepSerializer(many=True, read_only=True)
+
+    # Добавляем строковое представление счета и автора, чтобы на фронте выводить имена
+    account_name = serializers.CharField(source='account.name', read_only=True)
+    author_name = serializers.CharField(source='author.name', read_only=True)
+
+    class Meta:
+        model = Trade
+        fields = '__all__'

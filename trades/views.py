@@ -34,7 +34,7 @@ from rest_framework.views import APIView
 from xhtml2pdf import pisa
 
 from .models import Trade, PlaybookPattern, TradeScreenshot, ReviewStep, FAQBlock, FAQTopic, UserQuizProgress, Question, \
-    AnswerChoice, Quiz, DailyBacktest
+    AnswerChoice, Quiz, DailyBacktest, TradeAccount, TradeAuthor
 import csv
 from datetime import datetime, timedelta
 import pytz
@@ -42,7 +42,7 @@ import base64
 
 from .mt5_service import MT5Bridge
 from .serializers import TradeSerializer, FAQBlockSerializer, FAQTopicSerializer, \
-    QuestionSerializer, QuizSerializer  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
+    QuestionSerializer, QuizSerializer, TradeAccountSerializer, TradeAuthorSerializer  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
 import random
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
@@ -77,6 +77,27 @@ def register_user(request):
                                                                         status=status.HTTP_400_BAD_REQUEST)
     user = User.objects.create_user(username=username, password=password)
     return Response({"message": "Аккаунт успешно создан!"}, status=status.HTTP_201_CREATED)
+
+class TradeAccountViewSet(viewsets.ModelViewSet):
+    serializer_class = TradeAccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return TradeAccount.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class TradeAuthorViewSet(viewsets.ModelViewSet):
+    serializer_class = TradeAuthorSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return TradeAuthor.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class PlaybookSerializer(serializers.ModelSerializer):
@@ -469,10 +490,18 @@ class TradeViewSet(viewsets.ModelViewSet):
         strategy_name = request.data.get('strategy_name', '')
         setup_grade = request.data.get('setup_grade', '')
         confluence_factors = request.data.get('confluence_factors', '')
-
-        # 👇 Достаем новые поля 👇
+        summary = request.data.get('summary', '')
         market_trend = request.data.get('market_trend', '')
         entry_logic = request.data.get('entry_logic', '')
+
+        # 👇 ДОСТАЕМ НОВЫЕ ID ИЗ ЗАПРОСА 👇
+        account_id = request.data.get('account_id')
+        author_id = request.data.get('author_id')
+
+        # Загружаем объекты из базы, если ID переданы
+        from .models import TradeAccount, TradeAuthor
+        account_obj = TradeAccount.objects.filter(id=account_id, user=request.user).first() if account_id else None
+        author_obj = TradeAuthor.objects.filter(id=author_id, user=request.user).first() if author_id else None
 
         if not trade_ids: return Response({"error": "Сделки не выбраны"}, status=400)
         trades = Trade.objects.filter(id__in=trade_ids, user=request.user)
@@ -482,10 +511,13 @@ class TradeViewSet(viewsets.ModelViewSet):
             if strategy_name: trade.strategy_name = strategy_name
             if setup_grade: trade.setup_grade = setup_grade
             if confluence_factors: trade.confluence_factors = confluence_factors
-
-            # 👇 Сохраняем новые поля 👇
+            if summary: trade.summary = summary
             if market_trend: trade.market_trend = market_trend
             if entry_logic: trade.entry_logic = entry_logic
+
+            # 👇 СОХРАНЯЕМ СЧЕТ И АВТОРА, ЕСЛИ ОНИ ВЫБРАНЫ 👇
+            if account_id: trade.account = account_obj
+            if author_id: trade.author = author_obj
 
             trade.is_processed = True
             trade.save()
@@ -689,26 +721,37 @@ class TradeViewSet(viewsets.ModelViewSet):
         return Response({"message": "Успешно удалено!"})
 
     @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'])
     def add_manual(self, request):
         data = request.data
+        author_id = data.get('author_id')
+        account_id = data.get('account_id')
 
-        # Забираем автора из формы
-        author = data.get('author', 'RS').strip()
-        date_str = data.get('date')
+        # Если передали имя вместо ID (для обратной совместимости)
+        author_name = data.get('author', 'Unknown').strip()
 
-        # 👇 НОВОЕ: Забираем условный профит из формы 👇
-        profit_val = float(data.get('profit', 0.0))
+        # Пытаемся найти или создать автора, если ID не передан
+        author_obj = None
+        if author_id:
+            author_obj = TradeAuthor.objects.filter(id=author_id, user=request.user).first()
+        elif author_name and author_name != 'Unknown':
+            author_obj, _ = TradeAuthor.objects.get_or_create(user=request.user, name=author_name)
+
+        account_obj = None
+        if account_id:
+            account_obj = TradeAccount.objects.filter(id=account_id, user=request.user).first()
 
         import random
-        # Генерируем красивый именной тикет (напр: Регина_1482)
-        ticket = f"{author}_{random.randint(1000, 9999)}"
+        # Генерируем тикет с использованием имени автора, если оно есть
+        t_name = author_obj.name if author_obj else "Manual"
+        ticket = f"{t_name}_{random.randint(1000, 9999)}"
 
         from django.utils import timezone
         from datetime import datetime
 
+        date_str = data.get('date')
         if date_str:
             try:
-                # Нам не нужно точное время, ставим просто 12:00 указанного дня
                 trade_time = timezone.make_aware(datetime.strptime(f"{date_str} 12:00:00", "%Y-%m-%d %H:%M:%S"))
             except ValueError:
                 trade_time = timezone.now()
@@ -723,11 +766,13 @@ class TradeViewSet(viewsets.ModelViewSet):
                 type=data.get('type', 'SELL'),
                 volume=0.0,
                 entry_price=0.0,
-                profit=profit_val,  # 👈 ТЕПЕРЬ СТАВИМ РЕЗУЛЬТАТ (1 ИЛИ -1) ИЗ ФОРМЫ
+                profit=float(data.get('profit', 0.0)),
                 time=trade_time,
                 strategy_name="Разбор чужой сделки",
-                entry_logic="Чужая сделка",  # 👈 Гарантирует, что сделка не попадет в твою стату!
-                is_processed=False  # Во Входящие
+                entry_logic="Чужая сделка",
+                is_processed=False,
+                author=author_obj,  # 👈 Привязываем автора
+                account=account_obj  # 👈 Привязываем счет
             )
             return Response({"message": "Чужая сделка добавлена!", "id": trade.id}, status=201)
         except Exception as e:

@@ -136,6 +136,14 @@
         <div class="comment-box">{{ trade.comment|linebreaksbr }}</div>
     </div>
     {% endif %}
+    {% if trade.summary %}
+    <div class="block">
+        <strong>Резюме и Выводы:</strong>
+        <div class="comment-box" style="border-left-color: #28a745; background-color: #e8f5e9;">
+            {{ trade.summary|linebreaksbr }}
+        </div>
+    </div>
+    {% endif %}
 
     {% if trade.analysis_screens.all %}
     <div class="section-title">Аналитика (До входа / В процессе)</div>

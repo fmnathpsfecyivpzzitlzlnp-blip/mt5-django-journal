@@ -80,7 +80,8 @@
         </div>
 
         <p style="margin-top: 10px; margin-bottom: 15px; padding-left: 5px;">
-            <i>Логика: {{ t.entry_logic }} | План: {{ t.comment|default:"-"|linebreaksbr }}</i>
+            <i>Логика: {{ t.entry_logic }} | План: {{ t.comment|default:"-"|linebreaksbr }}</i><br>
+            <i>Резюме: {{ t.summary|default:"-"|linebreaksbr }}</i>
         </p>
 
         {% for s in t.analysis_screens.all %}{% if s.timeframe == 'D1' %}
