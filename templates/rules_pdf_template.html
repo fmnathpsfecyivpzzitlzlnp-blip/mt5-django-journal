@@ -3,7 +3,11 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { size: A4; margin: 2cm; @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 2cm; margin-right: 2cm; height: 1cm; } }
+        @page {
+            size: A4; margin: 2cm; margin-top: 2.5cm;
+            @frame header { -pdf-frame-content: header_content; top: 1cm; right: 2cm; width: 10cm; height: 1cm; }
+            @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 2cm; margin-right: 2cm; height: 1cm; }
+        }
         body { font-family: "DejaVu", sans-serif; font-size: 14px; color: #333; line-height: 1.5; }
         h1 { text-align: center; color: #0dcaf0; border-bottom: 3px solid #0dcaf0; padding-bottom: 15px; margin-bottom: 30px; }
         h2 { color: #dc3545; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 30px; }
@@ -12,6 +16,10 @@
     </style>
 </head>
 <body>
+    <div id="header_content" style="text-align: right; font-size: 10px; color: #888;">
+        Стр. <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
     <div id="footer_content" style="text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
         Моя Торговая Конституция | Страница <pdf:pagenumber> из <pdf:pagecount>
     </div>

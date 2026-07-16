@@ -5,7 +5,8 @@
     <title>Отчет по сделкам</title>
     <style>
         @page {
-            size: A4; margin: 1.5cm; margin-bottom: 2.5cm;
+            size: A4; margin: 1.5cm; margin-top: 2.5cm; margin-bottom: 2.5cm;
+            @frame header { -pdf-frame-content: header_content; top: 1cm; right: 1.5cm; width: 10cm; height: 1cm; }
             @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 1.5cm; margin-right: 1.5cm; height: 1cm; }
         }
         body { font-family: "DejaVu", sans-serif; font-size: 12px; color: #333; line-height: 1.4; }
@@ -37,6 +38,10 @@
     </style>
 </head>
 <body>
+    <div id="header_content" style="text-align: right; font-size: 10px; color: #888;">
+        Стр. <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
     <div id="footer_content" style="text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
         Торговый отчет • Квантовый Дневник | Страница <pdf:pagenumber> из <pdf:pagecount>
     </div>

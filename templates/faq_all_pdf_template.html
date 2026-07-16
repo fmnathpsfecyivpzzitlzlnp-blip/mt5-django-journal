@@ -5,7 +5,8 @@
     <title>Полная База Знаний</title>
     <style>
         @page {
-            size: A4; margin: 2cm; margin-bottom: 2.5cm;
+            size: A4; margin: 2cm; margin-top: 2.5cm; margin-bottom: 2.5cm;
+            @frame header { -pdf-frame-content: header_content; top: 1cm; right: 2cm; width: 10cm; height: 1cm; }
             @frame footer { -pdf-frame-content: footer_content; bottom: 1cm; margin-left: 2cm; margin-right: 2cm; height: 1cm; }
         }
         body { font-family: "DejaVu", sans-serif; font-size: 14px; color: #333; line-height: 1.5; }
@@ -29,6 +30,10 @@
     </style>
 </head>
 <body>
+    <div id="header_content" style="text-align: right; font-size: 10px; color: #888;">
+        Стр. <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
     <!-- ФУТЕР (Страницы только внизу листа, в оглавлении их не будет) -->
     <div id="footer_content" style="text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
         Моя торговая база • Квантовый Дневник | Страница <pdf:pagenumber> из <pdf:pagecount>

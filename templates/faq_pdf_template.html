@@ -6,6 +6,8 @@
         @page {
             size: a4 portrait;
             margin: 2cm;
+            margin-top: 2.5cm;
+            @frame header { -pdf-frame-content: header_content; top: 1cm; right: 2cm; width: 10cm; height: 1cm; }
         }
 
         /* Библиотека сама заменит sans-serif на DejaVu благодаря коду в Python */
@@ -64,6 +66,10 @@
     </style>
 </head>
 <body>
+    <div id="header_content" style="text-align: right; font-size: 10px; color: #888;">
+        Стр. <pdf:pagenumber> из <pdf:pagecount>
+    </div>
+
     <div class="header">
         <div class="category">{{ topic.category }}</div>
         <div class="question">{{ topic.question }}</div>
