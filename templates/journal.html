@@ -179,7 +179,7 @@
     <div class="modal-dialog modal-fullscreen modal-dialog-scrollable">
         <div class="modal-content bg-dark border-secondary">
             <div class="modal-header border-secondary bg-black">
-                <h5 class="modal-title text-light">🔬 Квантовый Разбор: Сделка #<span id="rev-ticket" class="text-info"></span></h5>
+                <h5 class="modal-title text-light">🔬 Квантовый Разбор: Сделка #<span id="rev-ticket" class="text-warning" style="cursor:pointer; border-bottom: 1px dashed #ffc107;" onclick="renameTradeTicket()" title="Нажми, чтобы переименовать сделку"></span></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
 
@@ -1252,5 +1252,40 @@ https://www.tradingview.com/x/oukD8T9m/
                 if(document.getElementById('manual-author')) document.getElementById('manual-author').innerHTML = html;
             }
         }
+        async function renameTradeTicket() {
+        if (!currentReviewTradeId) return;
+        const span = document.getElementById('rev-ticket');
+        const oldTicket = span.innerText;
+
+        // Спрашиваем новое имя
+        const newTicket = prompt("Введи новое имя (тикет) для этой сделки:", oldTicket);
+
+        // Если ввели текст и он отличается от старого
+        if (newTicket && newTicket.trim() !== "" && newTicket.trim() !== oldTicket) {
+            const fd = new FormData();
+            fd.append('ticket', newTicket.trim());
+
+            try {
+                // Отправляем PATCH запрос на сервер для обновления поля ticket
+                const res = await fetch(`${API_BASE}trades/${currentReviewTradeId}/`, {
+                    method: 'PATCH',
+                    body: fd,
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    credentials: 'same-origin'
+                });
+
+                if (res.ok) {
+                    // Обновляем текст в шапке модалки
+                    span.innerText = newTicket.trim();
+                    // Обновляем главную таблицу на фоне, чтобы там тоже сменилось имя
+                    initPage();
+                } else {
+                    alert("Ошибка при переименовании в базе данных.");
+                }
+            } catch (e) {
+                alert("Ошибка сети");
+            }
+        }
+    }
 </script>
 {% endblock %}
