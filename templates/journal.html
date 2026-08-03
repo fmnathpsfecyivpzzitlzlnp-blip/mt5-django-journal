@@ -99,8 +99,9 @@
         <div class="row g-2">
             <div class="col-12 text-end">
                 <button class="btn btn-sm btn-danger fw-bold me-2" onclick="deleteSelectedTrades()">🔥 Удалить выбранные</button>
-                <button class="btn btn-sm btn-success fw-bold" onclick="exportToExcel()">📊 Экспорт в Excel (CSV)</button>
-                <button class="btn btn-sm btn-outline-danger fw-bold me-2" onclick="exportFilteredPDF()">📄 Экспорт в PDF (Фильтр)</button>
+                <button class="btn btn-sm btn-info text-dark fw-bold me-2 shadow-sm" onclick="openQuantumAuditModal()" style="background: linear-gradient(45deg, #0dcaf0, #ffc107); border: none;">🔬 Аудит Концентрации</button>
+                <button class="btn btn-sm btn-success fw-bold" onclick="exportToExcel()">📊 Экспорт в Excel</button>
+                <button class="btn btn-sm btn-outline-danger fw-bold ms-2" onclick="exportFilteredPDF()">📄 Экспорт в PDF</button>
             </div>
         </div>
     </div>
@@ -303,6 +304,39 @@ https://www.tradingview.com/x/oukD8T9m/
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка Квантового Аудита -->
+<div class="modal fade" id="quantumAuditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header bg-black border-info">
+                <h5 class="modal-title text-info fw-bold">🔬 Квантовый Аудит Концентрации</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-light">
+                <div class="row align-items-center mb-4">
+                    <div class="col-md-4 text-center border-end border-secondary">
+                        <h6 class="text-secondary mb-1">Рейтинг системы</h6>
+                        <h1 id="audit-grade" class="display-1 fw-bold mb-0">--</h1>
+                        <span id="audit-composite" class="badge bg-secondary fs-6 mt-2">-- / 100</span>
+                    </div>
+                    <div class="col-md-8 ps-4">
+                        <h6 class="text-warning border-bottom border-warning pb-1 mb-3">Детальные метрики</h6>
+                        <div class="d-flex justify-content-between mb-2"><span>Топ-5 сделок (Доля прибыли):</span> <strong id="audit-topn" class="text-info">--</strong></div>
+                        <div class="d-flex justify-content-between mb-2"><span>Индекс Джини (Неравенство):</span> <strong id="audit-gini" class="text-info">--</strong></div>
+                        <div class="d-flex justify-content-between mb-2"><span>Самый прибыльный день:</span> <strong id="audit-day" class="text-info">--</strong></div>
+                        <div class="d-flex justify-content-between mb-2"><span>Выживаемость (без лучших 5%):</span> <strong id="audit-survival" class="text-info">--</strong></div>
+                    </div>
+                </div>
+
+                <div class="alert bg-black border-secondary p-3 shadow-sm">
+                    <h6 class="text-light fw-bold mb-2">🤖 Вердикт ИИ-Анализатора:</h6>
+                    <ul id="audit-recommendations" class="mb-0 text-muted small ps-3" style="line-height: 1.6;"></ul>
+                </div>
             </div>
         </div>
     </div>
@@ -567,7 +601,9 @@ https://www.tradingview.com/x/oukD8T9m/
                 pClass = 'text-muted text-decoration-line-through';
                 rowOpacity = "opacity: 0.5;";
             }
-            const tBadge = t.type === 'BUY' ? '<span class="badge bg-success bg-opacity-25 text-success">BUY</span>' : '<span class="badge bg-danger bg-opacity-25 text-danger">SELL</span>';
+            const tBadge = t.type === 'BUY' ?
+                `<span class="badge bg-success bg-opacity-25 text-success" style="cursor:pointer; border-bottom: 1px dashed #198754;" onclick="toggleTradeType(event, ${t.id}, 'SELL', this)" title="Кликни, чтобы сменить на SELL">BUY 🔄</span>` :
+                `<span class="badge bg-danger bg-opacity-25 text-danger" style="cursor:pointer; border-bottom: 1px dashed #dc3545;" onclick="toggleTradeType(event, ${t.id}, 'BUY', this)" title="Кликни, чтобы сменить на BUY">SELL 🔄</span>`;
             const isReviewed = t.mentor_reviews && t.mentor_reviews.length > 0;
             const reviewBadge = isReviewed ? '<span class="badge bg-danger ms-2" title="Проверено RS">🔥 Разнос</span>' : '<span class="badge border border-secondary text-secondary ms-2">⚪</span>';
             const contextText = (t.market_trend && t.entry_logic) ? `<br><small class="text-info">${t.market_trend} ➔ ${t.entry_logic}</small>` : '';
@@ -1286,6 +1322,137 @@ https://www.tradingview.com/x/oukD8T9m/
                 alert("Ошибка сети");
             }
         }
+    }
+
+    async function toggleTradeType(event, id, newType, element) {
+        // Останавливаем клик, чтобы он не улетал дальше в таблицу
+        event.stopPropagation();
+
+        if (!confirm(`Точно изменить направление сделки на ${newType}?`)) return;
+
+        // Визуально показываем, что идет загрузка
+        const originalText = element.innerText;
+        element.innerText = '⏳...';
+
+        try {
+            const res = await fetch(`${API_BASE}trades/${id}/`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',  // 👈 Используем чистый JSON
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ type: newType })  // 👈 Надежно упаковываем данные
+            });
+
+            if (res.ok) {
+                initPage(); // Мгновенно обновляем таблицу
+            } else {
+                // Если сервер ругается, он скажет точную причину
+                const errText = await res.text();
+                alert(`Сервер отклонил запрос!\nПричина: ${errText}`);
+                console.error("Ошибка PATCH:", errText);
+                element.innerText = originalText; // Возвращаем текст кнопки
+            }
+        } catch (e) {
+            alert("Ошибка сети. Проверь подключение.");
+            console.error(e);
+            element.innerText = originalText;
+        }
+    }
+    function openQuantumAuditModal() {
+        const trades = currentFilteredTrades;
+        if (trades.length < 10) return alert("Для аудита нужно минимум 10 сделок в текущем фильтре!");
+
+        let grossProfit = 0, grossLoss = 0;
+        let winners = [];
+        let dailyPnl = {};
+
+        // 1. Сбор базовой статистики
+        trades.forEach(t => {
+            let p = parseFloat(t.profit) || 0;
+            if (p > 0) {
+                grossProfit += p;
+                winners.push(p);
+            } else {
+                grossLoss += Math.abs(p);
+            }
+
+            // Считаем PnL по дням
+            let dateKey = t.time.split('T')[0];
+            dailyPnl[dateKey] = (dailyPnl[dateKey] || 0) + p;
+        });
+
+        let netProfit = grossProfit - grossLoss;
+        if (netProfit <= 0) return alert("Аудит имеет смысл только для прибыльного набора сделок (Чистая прибыль должна быть > $0).");
+
+        // Сортируем победителей по возрастанию
+        winners.sort((a, b) => a - b);
+        let nWinners = winners.length;
+        if (nWinners < 2) return alert("Слишком мало плюсовых сделок для математического анализа.");
+
+        // 2. Коэффициент Джини (Gini)
+        let sumW = winners.reduce((a, b) => a + b, 0);
+        let weightedSum = winners.reduce((sum, w, i) => sum + (i + 1) * w, 0);
+        let gini = (2.0 * weightedSum) / (nWinners * sumW) - (nWinners + 1) / nWinners;
+
+        // 3. Доля Топ-5 сделок
+        let topN = Math.min(5, nWinners);
+        let topNSum = 0;
+        for (let i = nWinners - 1; i >= nWinners - topN; i--) topNSum += winners[i];
+        let topNShare = (topNSum / netProfit) * 100;
+
+        // 4. Стресс-тест выживаемости (убираем лучшие 5% сделок)
+        let removeCount = Math.max(1, Math.ceil(nWinners * 0.05));
+        let stressGrossProfit = 0;
+        for (let i = 0; i < nWinners - removeCount; i++) stressGrossProfit += winners[i];
+        let stressNet = stressGrossProfit - grossLoss;
+        let survivalRatio = (stressNet / netProfit) * 100;
+
+        // 5. Лимит Проп-фирм (Day Consistency - самый жирный день)
+        let bestDayPnl = 0;
+        for (let d in dailyPnl) {
+            if (dailyPnl[d] > bestDayPnl) bestDayPnl = dailyPnl[d];
+        }
+        let bestDayShare = (bestDayPnl / netProfit) * 100;
+
+        // 6. Подсчет баллов (Эвристика из статьи)
+        let concScore = Math.max(0, 100 - Math.max(0, topNShare - 25) * 1.4);
+        let consistScore = Math.max(0, 100 - Math.max(0, bestDayShare - 20) * 2.5); // Лимит пропа 20%
+        let survScore = Math.max(0, Math.min(100, survivalRatio));
+
+        let composite = (concScore * 0.4) + (consistScore * 0.35) + (survScore * 0.25);
+        let grade = "F"; let colorClass = "text-danger";
+        if (composite >= 90) { grade = "A+"; colorClass = "text-success"; }
+        else if (composite >= 80) { grade = "A"; colorClass = "text-success"; }
+        else if (composite >= 70) { grade = "B"; colorClass = "text-info"; }
+        else if (composite >= 60) { grade = "C"; colorClass = "text-warning"; }
+        else if (composite >= 50) { grade = "D"; colorClass = "text-warning"; }
+
+        // 7. Отрисовка в UI
+        const gradeEl = document.getElementById('audit-grade');
+        gradeEl.innerText = grade;
+        gradeEl.className = `display-1 fw-bold mb-0 ${colorClass}`;
+
+        document.getElementById('audit-composite').innerText = `${composite.toFixed(1)} / 100`;
+        document.getElementById('audit-topn').innerText = `${topNShare.toFixed(1)}%`;
+        document.getElementById('audit-gini').innerText = gini.toFixed(3);
+        document.getElementById('audit-day').innerText = `${bestDayShare.toFixed(1)}%`;
+        document.getElementById('audit-survival').innerText = `${survivalRatio.toFixed(1)}%`;
+
+        // 8. Генерация умных рекомендаций
+        let recs = "";
+        if (topNShare >= 40.0) recs += `<li><span class="text-warning fw-bold">Концентрация:</span> Топ-${topN} сделок приносят ${topNShare.toFixed(0)}% всей прибыли. Убедись, что это системные сделки по тренду, а не случайные залеты.</li>`;
+        if (bestDayShare > 20.0) recs += `<li><span class="text-danger fw-bold">Риск проп-фирмы:</span> Один торговый день принес ${bestDayShare.toFixed(0)}% профита (лимит пропа 20%). Если ты сдаешь челлендж, придется размазывать прибыль мелкими лотами.</li>`;
+        if (survivalRatio < 45.0) recs += `<li><span class="text-danger fw-bold">Зависимость от выбросов:</span> Удаление всего ${removeCount} лучших сделок срезает более половины твоего профита. Выживаемость низкая.</li>`;
+        if (gini >= 0.6) recs += `<li><span class="text-warning fw-bold">Индекс Джини:</span> ${gini.toFixed(2)} - прибыль крайне неравномерна. Система держится на редких выбросах удачи.</li>`;
+        if (composite >= 80.0) recs += `<li><span class="text-success fw-bold">Отлично:</span> Прибыль равномерно размазана по сделкам и дням. Железобетонная система, можно спокойно увеличивать риск!</li>`;
+
+        document.getElementById('audit-recommendations').innerHTML = recs || "<li>Система сбалансирована, критических отклонений не найдено.</li>";
+
+        // Показываем модалку
+        let modal = new bootstrap.Modal(document.getElementById('quantumAuditModal'));
+        modal.show();
     }
 </script>
 {% endblock %}
