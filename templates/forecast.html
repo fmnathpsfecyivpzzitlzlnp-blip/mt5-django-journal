@@ -7,10 +7,15 @@
         <small class="text-secondary">Базовая модель для языка финансовых рынков | Актив: <span class="text-light fw-bold">XAUUSD</span></small>
     </div>
     <div class="text-end">
-        <div class="badge bg-dark border border-secondary p-2 fs-6">
-            ⏱ Обновление через: <span id="countdown" class="text-info fw-bold">03:00</span>
+        <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+            <button id="btn-toggle-ai" class="btn btn-sm btn-success fw-bold shadow-sm" onclick="toggleAIForecast()">▶️ Запустить ИИ</button>
+            <button class="btn btn-sm btn-outline-danger py-1 px-2" onclick="clearAIData()" title="Очистить память">🗑️</button>
+
+            <div id="countdown-badge" class="badge bg-dark border border-secondary p-2 fs-6 d-none">
+                ⏱ <span id="countdown" class="text-info fw-bold">--:--</span>
+            </div>
         </div>
-        <div class="small text-muted mt-1" id="last-update">Последний расчет: Загрузка...</div>
+        <div class="small text-muted" id="last-update">Статус: ИИ отключен (Экономия ресурсов)</div>
     </div>
 </div>
 
@@ -119,10 +124,14 @@
         localStorage.setItem('kronosDailyData', JSON.stringify(dailyAccumulated));
     }
 
+    let isAiActive = false; // По умолчанию ИИ отключен
+
     document.addEventListener("DOMContentLoaded", () => {
         initChart();
-        fetchForecast();
-        startCountdown();
+
+        // ❌ Убрали автозапуск при загрузке страницы:
+        // fetchForecast();
+        // startCountdown();
 
         document.querySelectorAll('.tf-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -135,7 +144,53 @@
                 renderActiveTab();
             });
         });
+
+        // Отрисовываем пустой график или то, что осталось с прошлой сессии
+        renderActiveTab();
     });
+
+    // 👇 НОВЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ИИ 👇
+
+    function toggleAIForecast() {
+        const btn = document.getElementById('btn-toggle-ai');
+        const badge = document.getElementById('countdown-badge');
+
+        isAiActive = !isAiActive;
+
+        if (isAiActive) {
+            btn.className = 'btn btn-sm btn-warning fw-bold shadow-sm';
+            btn.innerText = '⏸ Пауза (Стоп ИИ)';
+            badge.classList.remove('d-none');
+            document.getElementById('last-update').innerText = 'Запуск ИИ...';
+
+            fetchForecast();
+            startCountdown();
+        } else {
+            btn.className = 'btn btn-sm btn-success fw-bold shadow-sm';
+            btn.innerText = '▶️ Запустить ИИ';
+            badge.classList.add('d-none');
+            document.getElementById('last-update').innerText = 'Статус: ИИ остановлен';
+
+            if (countdownInterval) clearInterval(countdownInterval);
+        }
+    }
+
+    function clearAIData() {
+        if(!confirm("Удалить все накопленные прогнозы за сегодня и очистить график?")) return;
+
+        // Очищаем память
+        localStorage.removeItem('kronosDailyData');
+        localStorage.removeItem('kronosDate');
+        dailyAccumulated = { '1m': {}, '5m': {}, '15m': {}, '1H': {} };
+
+        // Очищаем таблицы
+        document.getElementById('mtf-table-body').innerHTML = '<tr><td colspan="3" class="text-muted small py-5">Нет данных...</td></tr>';
+        document.getElementById('mtf-consensus').innerText = '--';
+        document.getElementById('mtf-consensus').className = 'fw-bold fs-5 text-light';
+
+        // Перерисовываем пустой график
+        renderActiveTab();
+    }
 
     function startCountdown() {
         if (countdownInterval) clearInterval(countdownInterval);
