@@ -5,15 +5,14 @@ from urllib.parse import unquote
 import sys
 import traceback # Добавь этот импорт в начало views.py
 
-sys.path.append(r'd:\project\python\trade_j\tradingagents')
 try:
     from tradingagents.graph.trading_graph import TradingAgentsGraph
     from tradingagents.default_config import DEFAULT_CONFIG
 
     TRADING_AGENTS_READY = True
-except ImportError:
+except Exception as e:
     TRADING_AGENTS_READY = False
-    print("❌ ВНИМАНИЕ: Библиотека TradingAgents не найдена!")
+    print(f"❌ ОШИБКА ЗАГРУЗКИ KRONOS: {e}")
 
 
 import requests
