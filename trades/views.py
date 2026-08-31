@@ -709,6 +709,27 @@ class TradeViewSet(viewsets.ModelViewSet):
         )
         return Response({"message": "Вердикт RS добавлен!"})
 
+    @action(detail=False, methods=['post'])
+    def edit_feed_item(self, request):
+        item_type = request.data.get('type')
+        item_id = request.data.get('id')
+        new_text = request.data.get('text', '')
+        error_type = request.data.get('error_type', '')
+
+        if item_type == 'my':
+            item = TradeScreenshot.objects.filter(id=item_id).first()
+            if item:
+                item.description = new_text
+                item.save()
+        elif item_type == 'rs':
+            item = ReviewStep.objects.filter(id=item_id).first()
+            if item:
+                item.mentor_comment = new_text
+                if error_type:
+                    item.error_type = error_type
+                item.save()
+        return Response({'status': 'updated'})
+
     @action(detail=False, methods=['delete'])
     def delete_feed_item(self, request):
         item_type = request.query_params.get('type')

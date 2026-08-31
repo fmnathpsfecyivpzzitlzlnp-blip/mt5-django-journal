@@ -163,7 +163,9 @@
             {% endif %}
 
             {% if screen.description %}
-            <div class="comment-box">{{ screen.description|linebreaksbr }}</div>
+            <div class="comment-box" {% if screen.timeframe == 'Резюме' %}style="border-left-color: #28a745; background-color: #e8f5e9;"{% endif %}>
+                {{ screen.description|linebreaksbr }}
+            </div>
             {% endif %}
         </div>
         {% endfor %}
@@ -181,7 +183,7 @@
             </div>
             {% endif %}
 
-            <div class="comment-box">
+            <div class="mentor-box" {% if review.timeframe == 'Резюме' %}style="border-left-color: #dc3545; background-color: #ffe6e6;"{% endif %}>
                 <b>Вердикт:</b> {{ review.get_error_type_display }}<br>
                 {{ review.mentor_comment|linebreaksbr }}
             </div>
