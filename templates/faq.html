@@ -5,18 +5,18 @@
     .smart-dropzone:focus { border-color: #0dcaf0 !important; background-color: rgba(13, 202, 240, 0.1) !important; box-shadow: 0 0 15px rgba(13, 202, 240, 0.2); }
     .faq-category-header { background: linear-gradient(90deg, #1a1a1a, #2a2a2a, #1a1a1a); border-bottom: 2px solid #0dcaf0; }
 
-    /* НОВЫЕ СТИЛИ ДЛЯ ДИНАМИЧЕСКОГО ТЕКСТА */
-    #faq-container {
-        /* Дефолтные значения (перезапишутся из localStorage при загрузке) */
-        --current-font-size: 14px;
-        --current-text-color: #ffffff;
+    /* Глобальные переменные для размера и цвета текста */
+    :root {
+        --faq-font-size: 14px;
+        --faq-text-color: #ffffff;
     }
 
     .dynamic-caption {
-        font-size: var(--current-font-size) !important;
-        color: var(--current-text-color) !important;
-        transition: color 0.3s, font-size 0.3s;
-        white-space: pre-wrap; /* Сохраняем переносы строк */
+        font-size: var(--faq-font-size) !important;
+        color: var(--faq-text-color) !important;
+        transition: color 0.2s ease-in-out, font-size 0.2s ease-in-out;
+        white-space: pre-wrap; /* Сохраняем абзацы и переносы строк */
+        line-height: 1.4;
     }
 </style>
 {% endblock %}
@@ -32,9 +32,10 @@
     </div>
 </div>
 
+<!-- Панель управления текстом (Точно как в дневнике) -->
 <div class="card shadow p-2 mb-3 border-info bg-dark">
     <div class="d-flex gap-3 flex-wrap align-items-center">
-        <span class="text-info fw-bold small">🎨 Текст ответов:</span>
+        <span class="text-info fw-bold small">🎨 Текст под картинками:</span>
         <div class="d-flex gap-1">
             <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('12px')">12px</button>
             <button class="btn btn-sm btn-outline-info py-0" onclick="changeFontSize('14px')">14px</button>
@@ -80,43 +81,77 @@
         </div>
     </div>
 </div>
+
+<!-- Модалка редактирования блока FAQ -->
+<div class="modal fade" id="editFaqBlockModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-info">✏️ Изменить запись</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="edit-faq-block-id">
+                <label class="small text-secondary mb-2">Текст:</label>
+                <textarea id="edit-faq-block-text" class="form-control bg-dark text-light border-info" rows="8" style="font-size: 15px;"></textarea>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-info w-100 fw-bold text-dark" onclick="saveFaqBlockEdit()">💾 Сохранить изменения</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 {% block scripts %}
 <script>
     let faqData = [];
     let filesDict = {};
     let openAccordions = [];
+    let editFaqBlockModalInstance;
 
-    // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ЦВЕТА И ШРИФТА
+    // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ЦВЕТА И ШРИФТА (используем те же ключи, что и в дневнике, чтобы синхронизировать стиль!)
     let globalFontSize = localStorage.getItem('journalFontSize') || '14px';
     let globalTextColor = localStorage.getItem('journalTextColor') || '#ffffff';
 
-    // 👇 1. ИСПОЛЬЗУЕМ initPage ВМЕСТО DOMContentLoaded 👇
-    // base.html автоматически вызовет эту функцию только если пользователь авторизован!
+    // 👇 Функции для работы с масштабом картинки 👇
+    function getImgScale(id) {
+        return localStorage.getItem('faq_img_scale_' + id) || '100';
+    }
+
+    function changeImgScale(id, val) {
+        // Мы меняем ширину центрирующего контейнера картинки
+        const wrapper = document.getElementById(`faq-img-wrapper-${id}`);
+        const label = document.getElementById(`scale-label-${id}`);
+        
+        if (wrapper) wrapper.style.width = val + '%';
+        if (label) label.innerText = val + '%';
+        
+        // Автоматически сохраняем выбранный процент в браузере
+        localStorage.setItem('faq_img_scale_' + id, val);
+    }
+
     function initPage() {
+        editFaqBlockModalInstance = new bootstrap.Modal(document.getElementById('editFaqBlockModal'));
         applyGlobalStyles();
         loadFAQ();
     }
 
-    // Функция применения стилей к контейнеру FAQ
+    // Применение CSS-переменных к корню документа для всех текстов
     function applyGlobalStyles() {
-        const container = document.getElementById('faq-container');
-        if (container) {
-            container.style.setProperty('--current-font-size', globalFontSize);
-            container.style.setProperty('--current-text-color', globalTextColor);
-        }
+        document.documentElement.style.setProperty('--faq-font-size', globalFontSize);
+        document.documentElement.style.setProperty('--faq-text-color', globalTextColor);
     }
 
-    // Функции вызываемые по кнопкам
     function changeFontSize(size) {
         globalFontSize = size;
-        localStorage.setItem('journalFontSize', size);
+        localStorage.setItem('journalFontSize', size); // Синхронизация с дневником
         applyGlobalStyles();
     }
 
     function changeTextColor(color) {
         globalTextColor = color;
-        localStorage.setItem('journalTextColor', color);
+        localStorage.setItem('journalTextColor', color); // Синхронизация с дневником
         applyGlobalStyles();
     }
 
@@ -129,7 +164,6 @@
         try {
             const res = await fetch(API_BASE + 'faq_topics/');
 
-            // 👇 2. ЗАЩИТА ОТ 403 И 500 ОШИБОК 👇
             if (!res.ok) {
                 if (res.status === 401 || res.status === 403) {
                     alert("Сессия устарела. Страница будет перезагружена.");
@@ -139,10 +173,7 @@
             }
 
             faqData = await res.json();
-
-            // Если с сервера пришла дичь, делаем пустой массив
             if (!Array.isArray(faqData)) faqData = [];
-
             applyFAQSearch();
         } catch (e) {
             console.error("Ошибка сети:", e);
@@ -170,7 +201,6 @@
     function renderFAQ(dataToRender) {
         const container = document.getElementById('faq-container');
 
-        // ЗАЩИТА ОТ ПАДЕНИЯ forEach
         if (!Array.isArray(dataToRender) || dataToRender.length === 0) {
             container.innerHTML = '<div class="text-center text-muted p-5">Ничего не найдено.</div>';
             return;
@@ -202,19 +232,42 @@
                                 </a>
 
                                 <button class="btn btn-sm btn-outline-danger py-1 px-3" onclick="deleteTopic(${t.id})">
-                                    🗑️ Удалить тему
+                                    🗑️ Удалить тему целиком
                                 </button>
                             </div>
                             <div class="mb-4">
                                 ${t.blocks.length === 0 ? '<div class="text-muted small">Ответов пока нет.</div>' : ''}
                                 ${t.blocks.map(b => `
                                     <div class="card bg-dark border-secondary mb-3 shadow">
-                                        ${b.image ? `<img src="${b.image}" class="card-img-top border-bottom border-secondary" style="max-height: 400px; object-fit: contain; cursor: pointer;" onclick="window.open('${b.image}')">` : ''}
+                                        
+                                        <!-- 👇 ЖЕЛЕЗОБЕТОННЫЙ ЦЕНТРИРУЮЩИЙ КОНТЕЙНЕР ДЛЯ УМНОГО МАСШТАБИРОВАНИЯ ИЗОБРАЖЕНИЯ 👇 -->
+                                        ${b.image ? `
+                                        <div class="d-flex justify-content-center pt-3 pb-2" style="background-color: #121212; width: 100%;">
+                                            <div id="faq-img-wrapper-${b.id}" style="width: ${getImgScale(b.id)}%; transition: width 0.15s ease-out;">
+                                                <img src="${b.image}" class="border border-secondary shadow-sm" style="width: 100%; height: auto; cursor: pointer; border-radius: 5px; display: block;" onclick="window.open('${b.image}')" title="Нажмите, чтобы открыть в полном размере">
+                                            </div>
+                                        </div>` : ''}
 
-                                        ${b.text ? `<div class="card-body p-3"><p class="m-0 dynamic-caption">${b.text}</p></div>` : ''}
+                                        <!-- Блок с текстом -->
+                                        ${b.text ? `<div class="card-body p-3 border-top border-secondary"><p class="m-0 dynamic-caption" id="faq-block-text-${b.id}">${b.text}</p></div>` : `<p class="d-none" id="faq-block-text-${b.id}"></p>`}
 
-                                        <div class="card-footer p-1 bg-dark text-end border-top border-secondary small">
-                                            <button class="btn btn-sm btn-link text-danger py-0 px-1 text-decoration-none" onclick="deleteBlock(${b.id})">🗑️ Удалить блок</button>
+                                        <!-- ОБНОВЛЕННЫЙ ПОДВАЛ С КНОПКАМИ И ПОЛЗУНКОМ МАСШТАБА -->
+                                        <div class="card-footer p-2 bg-black d-flex justify-content-between align-items-center border-top border-secondary">
+                                            <div class="d-flex align-items-center gap-3 w-100">
+                                                <!-- КНОПКА ИЗМЕНИТЬ -->
+                                                <button class="btn btn-sm btn-info text-dark fw-bold py-1 px-3 flex-shrink-0" onclick="openEditBlockModal(${b.id})" title="Редактировать текст">✏️ Изменить</button>
+                                                
+                                                <!-- Ползунок показывается только если есть картинка -->
+                                                ${b.image ? `
+                                                <div class="d-flex align-items-center gap-2 bg-dark px-2 py-1 rounded border border-secondary flex-grow-1" style="max-width: 200px;" title="Изменить размер картинки">
+                                                    <span class="text-secondary small">🔍</span>
+                                                    <input type="range" class="form-range flex-grow-1" style="height: 12px;" min="20" max="100" step="5" value="${getImgScale(b.id)}" oninput="changeImgScale(${b.id}, this.value)">
+                                                    <span class="text-info small fw-bold" style="min-width: 45px;" id="scale-label-${b.id}">${getImgScale(b.id)}%</span>
+                                                </div>` : ''}
+                                            </div>
+                                            
+                                            <!-- КНОПКА УДАЛИТЬ -->
+                                            <button class="btn btn-sm btn-outline-danger py-1 px-3 flex-shrink-0 ms-3" onclick="deleteBlock(${b.id})" title="Удалить этот блок">🗑️ Удалить</button>
                                         </div>
                                     </div>
                                 `).join('')}
@@ -277,6 +330,48 @@
         });
     }
 
+    function openEditBlockModal(id) {
+        const textEl = document.getElementById(`faq-block-text-${id}`);
+        const text = textEl ? textEl.innerText : '';
+        document.getElementById('edit-faq-block-id').value = id;
+        document.getElementById('edit-faq-block-text').value = text;
+        editFaqBlockModalInstance.show();
+    }
+
+    async function saveFaqBlockEdit() {
+        const id = document.getElementById('edit-faq-block-id').value;
+        const text = document.getElementById('edit-faq-block-text').value;
+
+        const fd = new FormData();
+        fd.append('text', text);
+
+        const btn = event.target;
+        const origText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Сохранение...";
+
+        try {
+            const res = await fetch(`${API_BASE}faq_blocks/${id}/`, {
+                method: 'PATCH',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: fd,
+                credentials: 'same-origin'
+            });
+
+            if (res.ok) {
+                editFaqBlockModalInstance.hide();
+                await loadFAQ(); 
+            } else {
+                alert("Ошибка сервера при сохранении.");
+            }
+        } catch (e) {
+            alert("Ошибка сети при сохранении.");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+
     async function createTopic() {
         const cat = document.getElementById('topic-category').value.trim() || 'Разное';
         const q = document.getElementById('topic-question').value.trim();
@@ -289,7 +384,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify({ category: cat, question: q }),
-                credentials: 'same-origin' // 👈 ВОТ ЭТА СТРОЧКА СПАСЕТ ОТ 403
+                credentials: 'same-origin'
             });
 
             if (!res.ok) {
@@ -371,7 +466,7 @@
             method: 'POST',
             body: fd,
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            credentials: 'same-origin' // 👈 И ДОБАВЛЯЕМ ЕЁ СЮДА
+            credentials: 'same-origin' 
         });
 
         if(res.ok) {

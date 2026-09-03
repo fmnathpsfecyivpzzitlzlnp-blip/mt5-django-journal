@@ -241,6 +241,11 @@
 
 <div class="card shadow">
     <div class="card-body p-0">
+        <!-- 👇 НОВЫЙ БЛОК: Сводка над таблицей 👇 -->
+        <div id="inbox-summary" class="d-flex flex-wrap gap-3 justify-content-between text-muted small bg-black p-3 border-bottom border-secondary">
+            <!-- Сюда вставится статистика через JS -->
+        </div>
+
         <div class="table-responsive">
             <table class="table table-dark table-hover align-middle m-0">
                 <thead class="position-sticky top-0 bg-black" style="z-index: 1;">
@@ -331,10 +336,11 @@
         const res = await fetch(API_BASE + 'trades/?is_processed=false');
         inboxTrades = await res.json();
 
+        // Загружаем независимые от Дневника ключи
         if(localStorage.getItem('inbox_type')) document.getElementById('inbox-filter-type').value = localStorage.getItem('inbox_type');
-        if(localStorage.getItem('shared_sym')) document.getElementById('inbox-filter-search').value = localStorage.getItem('shared_sym');
-        if(localStorage.getItem('shared_mag')) document.getElementById('inbox-filter-magic').value = localStorage.getItem('shared_mag');
-        if(localStorage.getItem('shared_com')) document.getElementById('inbox-filter-comment').value = localStorage.getItem('shared_com');
+        if(localStorage.getItem('inbox_search')) document.getElementById('inbox-filter-search').value = localStorage.getItem('inbox_search');
+        if(localStorage.getItem('inbox_mag')) document.getElementById('inbox-filter-magic').value = localStorage.getItem('inbox_mag');
+        if(localStorage.getItem('inbox_com')) document.getElementById('inbox-filter-comment').value = localStorage.getItem('inbox_com');
         if(localStorage.getItem('inbox_d_from')) document.getElementById('inbox-filter-date-from').value = localStorage.getItem('inbox_d_from');
         if(localStorage.getItem('inbox_d_to')) document.getElementById('inbox-filter-date-to').value = localStorage.getItem('inbox_d_to');
         if(localStorage.getItem('inbox_c_from')) document.getElementById('inbox-filter-created-from').value = localStorage.getItem('inbox_c_from');
@@ -360,10 +366,11 @@
     }
 
     function applyInboxFilters() {
+        // Сохраняем в независимые от Дневника ключи
         localStorage.setItem('inbox_type', document.getElementById('inbox-filter-type').value);
-        localStorage.setItem('shared_sym', document.getElementById('inbox-filter-search').value);
-        localStorage.setItem('shared_mag', document.getElementById('inbox-filter-magic').value);
-        localStorage.setItem('shared_com', document.getElementById('inbox-filter-comment').value);
+        localStorage.setItem('inbox_search', document.getElementById('inbox-filter-search').value);
+        localStorage.setItem('inbox_mag', document.getElementById('inbox-filter-magic').value);
+        localStorage.setItem('inbox_com', document.getElementById('inbox-filter-comment').value);
         localStorage.setItem('inbox_d_from', document.getElementById('inbox-filter-date-from').value);
         localStorage.setItem('inbox_d_to', document.getElementById('inbox-filter-date-to').value);
         localStorage.setItem('inbox_c_from', document.getElementById('inbox-filter-created-from').value);
@@ -383,7 +390,8 @@
             const matchSearch = (
                 (t.ticket || '').toString().toLowerCase().includes(searchVal) ||
                 (t.volume || '').toString().toLowerCase().includes(searchVal) ||
-                (t.symbol || '').toString().toLowerCase().includes(searchVal)
+                (t.symbol || '').toString().toLowerCase().includes(searchVal) ||
+                (t.author_name || '').toString().toLowerCase().includes(searchVal)
             );
 
             const matchMagic = (t.magic_number || '').toString().toLowerCase().includes(magicVal);
@@ -423,11 +431,36 @@
     }
 
     function renderInbox(trades) {
+        // 👇 ВЫЧИСЛЕНИЕ СВОДНОЙ СТАТИСТИКИ ДЛЯ INBOX 👇
+        const total = trades.length;
+        const robots = trades.filter(t => t.magic_number && t.magic_number !== "0").length;
+        const manual = total - robots;
+        const buys = trades.filter(t => t.type === 'BUY').length;
+        const sells = trades.filter(t => t.type === 'SELL').length;
+        const multi = trades.filter(t => t.type === 'MULTI').length;
+        let sumPnl = trades.reduce((sum, t) => sum + (parseFloat(t.profit) || 0), 0);
+
+        document.getElementById('inbox-summary').innerHTML = `
+            <span>Ожидают разбора: <strong class="text-light">${total}</strong></span>
+            <span>Ручные 👤: <strong class="text-warning">${manual}</strong> | Роботы 🤖: <strong class="text-info">${robots}</strong></span>
+            <span>BUY: <strong class="text-success">${buys}</strong> | SELL: <strong class="text-danger">${sells}</strong> | MULTI: <strong class="text-warning">${multi}</strong></span>
+            <span>Итоговый PnL: <strong class="${sumPnl >= 0 ? 'text-success' : 'text-danger'} fs-6">$${sumPnl.toFixed(2)}</strong></span>
+        `;
+
         let html = '';
         trades.forEach(t => {
             const date = new Date(t.time).toLocaleString('ru-RU');
             const pClass = t.profit > 0 ? 'profit-positive' : 'profit-negative';
-            const tBadge = t.type === 'BUY' ? '<span class="badge bg-success bg-opacity-25 text-success">BUY</span>' : '<span class="badge bg-danger bg-opacity-25 text-danger">SELL</span>';
+
+            // Добавлена поддержка MULTI
+            let tBadge = '';
+            if (t.type === 'BUY') {
+                tBadge = `<span class="badge bg-success bg-opacity-25 text-success">BUY</span>`;
+            } else if (t.type === 'SELL') {
+                tBadge = `<span class="badge bg-danger bg-opacity-25 text-danger">SELL</span>`;
+            } else {
+                tBadge = `<span class="badge bg-warning bg-opacity-25 text-warning">MULTI</span>`;
+            }
 
             let screenBtn = '';
             if (t.auto_screen_d1) screenBtn += `<a href="${t.auto_screen_d1}" target="_blank" class="badge bg-primary text-decoration-none me-1">D1</a>`;
@@ -544,7 +577,7 @@
     async function runAIForecast() {
         const symbol = document.getElementById('ai-symbol').value;
         const dateStr = document.getElementById('ai-date').value;
-        const forecastType = document.getElementById('ai-forecast-type').value; // 👈 Добавили
+        const forecastType = document.getElementById('ai-forecast-type').value;
 
         if (!symbol || !dateStr) {
             return alert("Укажите актив и дату!");
@@ -570,7 +603,6 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                // 👇 Передаем type на сервер 👇
                 body: JSON.stringify({ symbol: symbol, date: dateStr, type: forecastType })
             });
 
@@ -748,9 +780,9 @@
                 localStorage.setItem('inbox_d_to', tradeDate);
 
                 localStorage.setItem('inbox_type', '');
-                localStorage.setItem('shared_sym', '');
-                localStorage.setItem('shared_mag', '');
-                localStorage.setItem('shared_com', '');
+                localStorage.setItem('inbox_search', '');
+                localStorage.setItem('inbox_mag', '');
+                localStorage.setItem('inbox_com', '');
                 localStorage.setItem('inbox_c_from', '');
                 localStorage.setItem('inbox_c_to', '');
 
@@ -770,6 +802,7 @@
             console.error(e);
         }
     }
+
     async function loadAccountsAndAuthors() {
         const accRes = await fetch(API_BASE + 'accounts/');
         if (accRes.ok) {

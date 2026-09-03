@@ -110,74 +110,60 @@
     </div>
 </div>
 
-<div class="card shadow"><div class="card-body p-0"><div class="table-responsive">
-    <table class="table table-dark table-hover m-0 align-middle">
-        <thead class="position-sticky top-0 bg-black" style="z-index: 1;"><tr>
-            <th class="ps-3" style="width: 40px;">
-                <input type="checkbox" class="form-check-input bg-dark border-secondary" id="selectAllCb" onchange="toggleAllCb(this)">
-            </th>
-            <th class="sortable text-info" id="th-time" onclick="sortTable('time')">Дата / Тикет ↕️</th>
-            <th class="sortable text-info" id="th-symbol" onclick="sortTable('symbol')">Ассет ↕️</th>
-            <th class="sortable text-info" id="th-profit" onclick="sortTable('profit')">PnL ($) ↕️</th>
-            <th class="sortable text-info" id="th-magic_number" onclick="sortTable('magic_number')">Мэджик 🤖 ↕️</th>
-            <th class="sortable text-info" id="th-mt5_comment" onclick="sortTable('mt5_comment')">Коммент 💬 ↕️</th>
-            <th class="sortable text-info">Моя Заметка 📝 ↕️</th>
-            <th>Статус Разбора / Контекст</th>
-            <th>Скрин / Действия</th>
-        </tr></thead>
-        <tbody id="trades-table-body"></tbody>
-    </table>
-</div></div></div>
+<div class="card shadow">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover m-0 align-middle">
+                <thead class="position-sticky top-0 bg-black" style="z-index: 1;"><tr>
+                    <th class="ps-3" style="width: 40px;">
+                        <input type="checkbox" class="form-check-input bg-dark border-secondary" id="selectAllCb" onchange="toggleAllCb(this)">
+                    </th>
+                    <th class="sortable text-info" id="th-time" onclick="sortTable('time')">Дата / Тикет ↕️</th>
+                    <th class="sortable text-info" id="th-symbol" onclick="sortTable('symbol')">Ассет ↕️</th>
+                    <th class="sortable text-info" id="th-profit" onclick="sortTable('profit')">PnL ($) ↕️</th>
+                    <th class="sortable text-info" id="th-magic_number" onclick="sortTable('magic_number')">Мэджик 🤖 ↕️</th>
+                    <th class="sortable text-info" id="th-mt5_comment" onclick="sortTable('mt5_comment')">Коммент 💬 ↕️</th>
+                    <th class="sortable text-info">Моя Заметка 📝 ↕️</th>
+                    <th>Статус Разбора / Контекст</th>
+                    <th>Скрин / Действия</th>
+                </tr></thead>
+                <tbody id="trades-table-body"></tbody>
+            </table>
+        </div>
+        <!-- 👇 НОВЫЙ БЛОК: Сводка под таблицей 👇 -->
+        <div id="journal-summary" class="d-flex flex-wrap gap-3 justify-content-between text-muted small bg-black p-3 border-top border-secondary rounded-bottom">
+            <!-- Сюда вставится статистика через JS -->
+        </div>
+    </div>
+</div>
 
-<div class="modal fade" id="addManualTradeModal" tabindex="-1">
+<!-- Модалка редактирования поста -->
+<div class="modal fade" id="editFeedItemModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-dark border-warning">
-            <div class="modal-header bg-black border-secondary">
-                <h5 class="modal-title text-warning">➕ Добавить чужую сделку</h5>
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header border-info bg-black">
+                <h5 class="modal-title text-info">✏️ Редактировать запись</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Автор сделки</label>
-                        <select id="manual-author" class="form-select bg-dark text-light border-secondary">
-                            <option value="">-- Выбрать --</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="small text-secondary mb-1">Торговый счет</label>
-                        <select id="manual-account" class="form-select bg-dark text-light border-secondary">
-                            <option value="">-- Выбрать --</option>
-                        </select>
-                    </div>
+                <input type="hidden" id="edit-feed-id">
+                <input type="hidden" id="edit-feed-type">
+                <div id="edit-rs-error-container" class="mb-3 d-none">
+                    <label class="small text-secondary mb-1">Тип ошибки (только для ментора):</label>
+                    <select id="edit-rs-error" class="form-select form-select-sm bg-dark text-light border-secondary">
+                        <option value="">-- Какая ошибка допущена? --</option>
+                        <option value="BIAS_ERROR">Против HTF Контекста</option>
+                        <option value="RANGE_MIDDLE">Вход в середине боковика</option>
+                        <option value="FAKE_BOS">Повелся на фейк-слом</option>
+                        <option value="EARLY_ENTRY">Спешка (вход до закрытия)</option>
+                        <option value="LOGIC_FAIL">Пиво / Галюны / Нет логики</option>
+                    </select>
                 </div>
-                <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <label class="small text-secondary mb-1">Актив</label>
-                        <input type="text" id="manual-symbol" class="form-control bg-dark text-light border-secondary" placeholder="XAUUSD" value="XAUUSD">
-                    </div>
-                    <div class="col-6">
-                        <label class="small text-secondary mb-1">Направление</label>
-                        <select id="manual-type" class="form-select bg-dark text-light border-secondary">
-                            <option value="BUY">BUY</option>
-                            <option value="SELL">SELL</option>
-                            <option value="MULTI">MULTI (Сетка / Несколько)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <label class="small text-secondary mb-1">PnL ($)</label>
-                        <input type="number" id="manual-profit" step="0.01" class="form-control bg-dark text-light border-secondary" placeholder="-1 или 5">
-                    </div>
-                    <div class="col-6">
-                        <label class="small text-secondary mb-1">Дата</label>
-                        <input type="date" id="manual-date" class="form-control bg-dark text-light border-secondary">
-                    </div>
-                </div>
+                <label class="small text-secondary mb-1">Текст записи:</label>
+                <textarea id="edit-feed-text" class="form-control bg-dark text-light border-info" rows="6" style="font-size: 15px;"></textarea>
             </div>
             <div class="modal-footer border-secondary">
-                <button class="btn btn-warning w-100 fw-bold text-dark" onclick="createManualTrade()">Создать карточку сделки</button>
+                <button type="button" class="btn btn-info w-100 fw-bold text-dark" onclick="saveFeedItemEdit()">💾 Сохранить изменения</button>
             </div>
         </div>
     </div>
@@ -311,38 +297,6 @@ https://www.tradingview.com/x/oukD8T9m/
                     </div>
                 </div>
 
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Модалка редактирования поста -->
-<div class="modal fade" id="editFeedItemModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-dark border-info">
-            <div class="modal-header border-info bg-black">
-                <h5 class="modal-title text-info">✏️ Редактировать запись</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <input type="hidden" id="edit-feed-id">
-                <input type="hidden" id="edit-feed-type">
-                <div id="edit-rs-error-container" class="mb-3 d-none">
-                    <label class="small text-secondary mb-1">Тип ошибки (только для ментора):</label>
-                    <select id="edit-rs-error" class="form-select form-select-sm bg-dark text-light border-secondary">
-                        <option value="">-- Какая ошибка допущена? --</option>
-                        <option value="BIAS_ERROR">Против HTF Контекста</option>
-                        <option value="RANGE_MIDDLE">Вход в середине боковика</option>
-                        <option value="FAKE_BOS">Повелся на фейк-слом</option>
-                        <option value="EARLY_ENTRY">Спешка (вход до закрытия)</option>
-                        <option value="LOGIC_FAIL">Пиво / Галюны / Нет логики</option>
-                    </select>
-                </div>
-                <label class="small text-secondary mb-1">Текст записи:</label>
-                <textarea id="edit-feed-text" class="form-control bg-dark text-light border-info" rows="6" style="font-size: 15px;"></textarea>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-info w-100 fw-bold text-dark" onclick="saveFeedItemEdit()">💾 Сохранить изменения</button>
             </div>
         </div>
     </div>
@@ -490,11 +444,10 @@ https://www.tradingview.com/x/oukD8T9m/
         const statsData = await statsRes.json();
         if (statsData.overview) renderStats(statsData);
 
-        const savedSearch = localStorage.getItem('shared_sym') || '';
+        // Загружаем независимые от Входящих ключи Дневника
+        const savedSearch = localStorage.getItem('j_search') || '';
         if (savedSearch) document.getElementById('filter-search').value = savedSearch;
 
-        // 👇 НОВОЕ ПОВЕДЕНИЕ: Берем с бэкенда всегда ВСЕ обработанные сделки
-        // Фильтрация поиска теперь делается МГНОВЕННО локально через JS, чтобы бэкенд не отсекал "неизвестные" авторы
         let url = API_BASE + 'trades/?is_processed=true';
 
         const tradesRes = await fetch(url);
@@ -515,8 +468,8 @@ https://www.tradingview.com/x/oukD8T9m/
         if(localStorage.getItem('j_date')) document.getElementById('filter-date').value = localStorage.getItem('j_date');
         if(localStorage.getItem('j_exact')) document.getElementById('filter-exact-date').value = localStorage.getItem('j_exact');
         if(localStorage.getItem('j_rev')) document.getElementById('filter-review').value = localStorage.getItem('j_rev');
-        if(localStorage.getItem('shared_mag')) document.getElementById('filter-magic').value = localStorage.getItem('shared_mag');
-        if(localStorage.getItem('shared_com')) document.getElementById('filter-comment').value = localStorage.getItem('shared_com');
+        if(localStorage.getItem('j_mag')) document.getElementById('filter-magic').value = localStorage.getItem('j_mag');
+        if(localStorage.getItem('j_com')) document.getElementById('filter-comment').value = localStorage.getItem('j_com');
 
         applyFilters();
         loadAccountsAndAuthors();
@@ -572,6 +525,7 @@ https://www.tradingview.com/x/oukD8T9m/
     }
 
     function applyFilters() {
+        // Сохраняем в независимые от Входящих ключи
         localStorage.setItem('j_type', document.getElementById('filter-type').value);
         localStorage.setItem('j_pnl', document.getElementById('filter-pnl').value);
         localStorage.setItem('j_trend', document.getElementById('filter-trend').value);
@@ -579,8 +533,9 @@ https://www.tradingview.com/x/oukD8T9m/
         localStorage.setItem('j_date', document.getElementById('filter-date').value);
         localStorage.setItem('j_exact', document.getElementById('filter-exact-date').value);
         localStorage.setItem('j_rev', document.getElementById('filter-review').value);
-        localStorage.setItem('shared_mag', document.getElementById('filter-magic').value);
-        localStorage.setItem('shared_com', document.getElementById('filter-comment').value);
+        localStorage.setItem('j_mag', document.getElementById('filter-magic').value);
+        localStorage.setItem('j_com', document.getElementById('filter-comment').value);
+        localStorage.setItem('j_search', document.getElementById('filter-search').value);
 
         const typeVal = document.getElementById('filter-type').value;
         const pnlVal = document.getElementById('filter-pnl').value;
@@ -679,6 +634,32 @@ https://www.tradingview.com/x/oukD8T9m/
     }
 
     function renderTable(trades) {
+        // 👇 ВЫЧИСЛЕНИЕ СВОДНОЙ СТАТИСТИКИ ДЛЯ ДНЕВНИКА 👇
+        const total = trades.length;
+        let sumPnl = 0;
+        let wins = 0;
+        let losses = 0;
+        let authorCounts = {};
+
+        trades.forEach(t => {
+            let p = parseFloat(t.profit) || 0;
+            sumPnl += p;
+            if (p > 0) wins++;
+            else if (p < 0) losses++;
+
+            let auth = t.author_name || 'Система / Без автора';
+            authorCounts[auth] = (authorCounts[auth] || 0) + 1;
+        });
+
+        let authorsHtml = Object.entries(authorCounts).map(([name, count]) => `${name}: <strong class="text-light">${count}</strong>`).join(' | ');
+
+        document.getElementById('journal-summary').innerHTML = `
+            <span>Отображено сделок: <strong class="text-light">${total}</strong></span>
+            <span>Профит 🟢: <strong class="text-success">${wins}</strong> | Убыток 🔴: <strong class="text-danger">${losses}</strong></span>
+            <span>${authorsHtml || 'Авторы не указаны'}</span>
+            <span>Общий PnL: <strong class="${sumPnl >= 0 ? 'text-success' : 'text-danger'} fs-6">$${sumPnl.toFixed(2)}</strong></span>
+        `;
+
         let html = '';
         trades.forEach(t => {
             const isPinned = (t.comment || '').includes('📌');
@@ -1385,7 +1366,7 @@ https://www.tradingview.com/x/oukD8T9m/
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
             const searchVal = document.getElementById('filter-search').value;
-            localStorage.setItem('shared_sym', searchVal);
+            localStorage.setItem('j_search', searchVal);
             applyFilters();
         }, 300);
     }
