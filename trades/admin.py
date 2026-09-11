@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import Trade, PlaybookPattern
-
+from .models import CatalogCategory, CatalogItem, ItemVersion
 
 @admin.register(Trade)
 class TradeAdmin(admin.ModelAdmin):
@@ -21,3 +21,7 @@ class PlaybookPatternAdmin(admin.ModelAdmin):
     # 👇 Заменили старые поля на новые 👇
     list_display = ('title', 'market_trend', 'entry_logic', 'created_at')
     list_filter = ('market_trend', 'entry_logic')
+
+admin.site.register(CatalogCategory)
+admin.site.register(CatalogItem)
+admin.site.register(ItemVersion)

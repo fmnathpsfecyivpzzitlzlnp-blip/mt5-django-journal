@@ -14,6 +14,8 @@ router.register(r'faq_topics', views.FAQTopicViewSet, basename='faq-topics')
 router.register(r'faq_blocks', views.FAQBlockViewSet, basename='faq-blocks')
 router.register(r'accounts', views.TradeAccountViewSet, basename='accounts')
 router.register(r'authors', views.TradeAuthorViewSet, basename='authors')
+router.register(r'catalog/categories', views.CatalogCategoryViewSet, basename='catalog-categories')
+router.register(r'catalog/items', views.CatalogItemViewSet, basename='catalog-items')
 
 urlpatterns = [
     path('', include(router.urls)),

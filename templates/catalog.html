@@ -1,0 +1,666 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    .tree-list { list-style-type: none; padding-left: 20px; }
+    .tree-list .tree-node { 
+        cursor: pointer; 
+        padding: 5px 10px; 
+        border-radius: 5px; 
+        display: inline-block; 
+        color: #adb5bd;
+        transition: 0.2s;
+        width: 100%;
+    }
+    .tree-list .tree-node:hover { background-color: rgba(13, 202, 240, 0.1); color: #0dcaf0; }
+    .tree-list .tree-node.active { background-color: #0dcaf0; color: #000; font-weight: bold; }
+    
+    .code-box {
+        background-color: #0d1117;
+        color: #58d68d;
+        font-family: 'Consolas', 'Courier New', monospace;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #30363d;
+        white-space: pre-wrap;
+        font-size: 13px;
+        height: 250px;
+        overflow-y: auto;
+    }
+
+    .version-badge { font-size: 0.8rem; background-color: #198754; padding: 3px 7px; border-radius: 4px; color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: none;">{% csrf_token %}</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="text-light m-0">📚 Каталог Ресурсов</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-info fw-bold shadow-sm" onclick="openAddCategoryModal()">➕ Папка</button>
+        <button class="btn btn-outline-success fw-bold shadow-sm" onclick="openAddItemModal()">➕ Ресурс</button>
+        <button class="btn btn-warning fw-bold shadow ms-3" onclick="openDeployModal()">🚀 Сгенерировать команду установки</button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- ЛЕВАЯ ПАНЕЛЬ: Дерево папок -->
+    <div class="col-md-3">
+        <div class="card bg-dark border-secondary shadow h-100">
+            <div class="card-header bg-black border-secondary py-3 text-info fw-bold">
+                🗂️ Навигация
+            </div>
+            <div class="card-body p-2" style="overflow-y: auto; max-height: 70vh;">
+                <div id="tree-container" class="text-light small">
+                    <div class="text-center text-muted mt-3">Загрузка дерева...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ЦЕНТРАЛЬНАЯ ПАНЕЛЬ: Таблица ресурсов -->
+    <div class="col-md-9">
+        <div class="card bg-dark border-secondary shadow h-100">
+            <div class="card-header bg-black border-secondary py-3 d-flex justify-content-between align-items-center">
+                <span id="current-category-title" class="text-light fw-bold">Выберите папку слева</span>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="text-muted small" id="items-count">0 элементов</span>
+                    <button id="btn-delete-cat" class="btn btn-sm btn-outline-danger d-none" onclick="deleteCurrentCategory()">🗑️ Удалить папку</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle m-0">
+                        <thead class="bg-black" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th class="ps-3" style="width: 40px;">
+                                    <input type="checkbox" id="select-all-items" class="form-check-input bg-dark border-secondary" onclick="toggleAllItems(this)">
+                                </th>
+                                <th>Название</th>
+                                <th>Тип</th>
+                                <th>Текущая версия</th>
+                                <th class="text-end pe-4">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-table-body">
+                            <tr><td colspan="5" class="text-center py-5 text-muted">Выберите категорию для просмотра файлов</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка: ДЕТАЛИ РЕСУРСА И ИСТОРИЯ ВЕРСИЙ -->
+<div class="modal fade" id="itemDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-info fw-bold" id="detail-item-title">Название Ресурса</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-light" style="background-color: #121212;">
+
+                <h6 class="text-secondary small border-bottom border-secondary pb-1 mb-2">Общее описание алгоритма:</h6>
+                <p id="detail-item-desc" class="text-light small mb-4" style="white-space: pre-wrap;"></p>
+
+                <h5 class="text-success border-bottom border-success pb-2 mb-4">🔄 История версий и файлы</h5>
+
+                <!-- Контейнер для карточек версий -->
+                <div id="versions-container">
+                    <!-- Заполняется через JS -->
+                </div>
+
+            </div>
+            <div class="modal-footer border-secondary bg-black">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка: СГЕНЕРИРОВАТЬ КОМАНДУ (SMART DEPLOY) -->
+<div class="modal fade" id="deployModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content bg-dark border-warning">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-warning fw-bold">🚀 Smart Deploy: Генератор команд</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-4">
+                    <div class="col-md-4 border-end border-secondary pe-4">
+                        <div class="mb-3">
+                            <label class="form-label text-secondary small">Операционная система терминала</label>
+                            <select id="deploy-os" class="form-select bg-black text-light border-secondary" onchange="generateDeployCode()">
+                                <option value="powershell">Windows (PowerShell)</option>
+                                <option value="cmd">Windows (CMD - curl)</option>
+                                <option value="bash">Linux / macOS (Bash - wget)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-secondary small">Базовая папка MT5 (Data Folder)</label>
+                            <input type="text" id="deploy-base-path" class="form-control bg-black text-info border-secondary"
+                                   placeholder="C:\Users\User\AppData\Roaming\MetaQuotes\Terminal\...\MQL5"
+                                   value="C:\Users\User\AppData\Roaming\MetaQuotes\Terminal\ВАШ_КОД\MQL5"
+                                   oninput="generateDeployCode()">
+                            <div class="form-text text-muted small mt-1">Откройте MT5 -> Файл -> Открыть каталог данных</div>
+                        </div>
+
+                        <div class="alert bg-warning bg-opacity-10 border-warning text-light small">
+                            <strong>Выбрано файлов:</strong> <span id="deploy-count" class="text-warning fw-bold">0</span><br><br>
+                            Скопируйте сгенерированный код справа и вставьте его в свой терминал. Файлы скачаются и автоматически разложатся по нужным папкам!
+                        </div>
+                    </div>
+
+                    <div class="col-md-8">
+                        <div class="d-flex justify-content-between align-items-end mb-2">
+                            <label class="form-label text-secondary small m-0">Код для выполнения:</label>
+                            <button class="btn btn-sm btn-outline-success fw-bold" onclick="copyDeployCode()">📋 Копировать код</button>
+                        </div>
+                        <textarea id="deploy-code-output" class="form-control code-box w-100" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка: Добавить Папку -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content bg-dark border-info">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-info">➕ Новая папка</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <label class="small text-secondary mb-1">Название папки</label>
+                <input type="text" id="new-cat-name" class="form-control bg-black text-light border-secondary mb-3">
+
+                <label class="small text-secondary mb-1">Где создать? (Родитель)</label>
+                <select id="new-cat-parent" class="form-select bg-black text-light border-secondary">
+                    <option value="">-- В корне --</option>
+                    <!-- Опции загрузятся через JS -->
+                </select>
+            </div>
+            <div class="modal-footer border-secondary p-2">
+                <button class="btn btn-info w-100 fw-bold text-dark" onclick="submitCategory()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка: Добавить Ресурс -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-success">
+            <div class="modal-header bg-black border-secondary">
+                <h5 class="modal-title text-success">➕ Добавить ресурс (Индикатор/Бот)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="small text-warning mb-3">Внимание: Здесь создается карточка. Загрузка исходников, файлов .ex5 и скринов (версии) происходит через Админ-панель Django.</p>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Название ресурса</label>
+                        <input type="text" id="new-item-name" class="form-control bg-black text-light border-secondary" placeholder="Напр: Smart_Liquidity_Pro">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small text-secondary mb-1">Тип</label>
+                        <select id="new-item-type" class="form-select bg-black text-light border-secondary">
+                            <option value="Indicator">Индикатор</option>
+                            <option value="Expert">Советник (Эксперт)</option>
+                            <option value="Script">Скрипт</option>
+                            <option value="Utility">Утилита (Python)</option>
+                            <option value="Book">Книга</option>
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="small text-secondary mb-1">В какую папку положить?</label>
+                        <select id="new-item-category" class="form-select bg-black text-light border-secondary">
+                            <!-- Опции загрузятся через JS -->
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="small text-secondary mb-1">Стандартный путь установки в MT5</label>
+                        <input type="text" id="new-item-path" class="form-control bg-black text-light border-secondary" placeholder="\Indicators\MyCustom\">
+                        <div class="form-text text-muted small">Относительно корня папки MQL5. Начинайте со слеша.</div>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="small text-secondary mb-1">Описание (Что делает)</label>
+                        <textarea id="new-item-desc" class="form-control bg-black text-light border-secondary" rows="2" placeholder="Краткое описание функционала..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button class="btn btn-success w-100 fw-bold text-dark" onclick="submitItem()">Создать карточку</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allCategories = [];
+    let currentCategoryId = null;
+    let currentItems = [];
+    let flatCategoriesList = [];
+
+    document.addEventListener("DOMContentLoaded", () => {
+        loadCatalogTree();
+    });
+
+    // --- 1. ЗАГРУЗКА И ОТРИСОВКА ДЕРЕВА ---
+    async function loadCatalogTree() {
+        try {
+            const res = await fetch('/api/catalog/categories/');
+            if (!res.ok) throw new Error("Network error");
+            const data = await res.json();
+            allCategories = data;
+
+            flatCategoriesList = [];
+
+            const treeHtml = buildTreeHtml(data);
+            document.getElementById('tree-container').innerHTML = treeHtml || '<div class="text-muted text-center">Каталог пуст</div>';
+
+            updateCategoryDropdowns();
+        } catch (e) {
+            document.getElementById('tree-container').innerHTML = '<div class="text-danger">Ошибка загрузки</div>';
+            console.error(e);
+        }
+    }
+
+    function buildTreeHtml(categories, level = 0) {
+        if (!categories || categories.length === 0) return '';
+        let html = `<ul class="tree-list" style="${level === 0 ? 'padding-left: 0;' : ''}">`;
+
+        categories.forEach(cat => {
+            let prefix = "— ".repeat(level);
+            flatCategoriesList.push({id: cat.id, name: prefix + cat.name});
+
+            let folderIcon = cat.children && cat.children.length > 0 ? '📂' : '📁';
+
+            html += `
+                <li class="mb-1">
+                    <span class="tree-node" id="node-${cat.id}" onclick="selectCategory(${cat.id}, '${cat.name}')">
+                        ${folderIcon} ${cat.name}
+                    </span>`;
+
+            if (cat.children && cat.children.length > 0) {
+                html += buildTreeHtml(cat.children, level + 1);
+            }
+            html += `</li>`;
+        });
+        html += `</ul>`;
+        return html;
+    }
+
+    function updateCategoryDropdowns() {
+        let html = '<option value="">-- В корне (Только для папок) --</option>';
+        let itemHtml = '';
+        flatCategoriesList.forEach(c => {
+            html += `<option value="${c.id}">${c.name}</option>`;
+            itemHtml += `<option value="${c.id}">${c.name}</option>`;
+        });
+        document.getElementById('new-cat-parent').innerHTML = html;
+        document.getElementById('new-item-category').innerHTML = itemHtml;
+    }
+
+    // --- 2. УДАЛЕНИЕ ПАПОК ---
+    async function deleteCurrentCategory() {
+        if(!currentCategoryId) return;
+
+        if(!confirm("⚠️ ВНИМАНИЕ! Вы уверены, что хотите удалить эту папку?\nВсе вложенные подпапки и ресурсы также будут удалены навсегда!")) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/catalog/categories/${currentCategoryId}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+
+            if (res.ok) {
+                currentCategoryId = null;
+                document.getElementById('current-category-title').innerText = 'Выберите папку слева';
+                document.getElementById('btn-delete-cat').classList.add('d-none');
+                document.getElementById('items-table-body').innerHTML = '<tr><td colspan="5" class="text-center py-5 text-muted">Выберите категорию для просмотра файлов</td></tr>';
+                document.getElementById('items-count').innerText = '0 элементов';
+                loadCatalogTree(); // Перерисовываем дерево
+            } else {
+                alert("Ошибка сервера при удалении папки.");
+            }
+        } catch (e) {
+            alert("Ошибка сети.");
+            console.error(e);
+        }
+    }
+
+    // --- 3. ВЫБОР ПАПКИ И ЗАГРУЗКА РЕСУРСОВ ---
+    async function selectCategory(id, name) {
+        currentCategoryId = id;
+
+        // Подсветка активной папки
+        document.querySelectorAll('.tree-node').forEach(el => el.classList.remove('active'));
+        document.getElementById(`node-${id}`).classList.add('active');
+
+        document.getElementById('current-category-title').innerText = `📂 ${name}`;
+
+        // Показываем кнопку удаления папки
+        document.getElementById('btn-delete-cat').classList.remove('d-none');
+
+        document.getElementById('items-table-body').innerHTML = '<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-info" role="status"></div></td></tr>';
+
+        try {
+            const res = await fetch(`/api/catalog/items/?category_id=${id}`);
+            currentItems = await res.json();
+
+            document.getElementById('items-count').innerText = `${currentItems.length} элементов`;
+            renderItemsTable();
+            document.getElementById('select-all-items').checked = false;
+        } catch (e) {
+            console.error("Ошибка загрузки элементов:", e);
+        }
+    }
+
+    function renderItemsTable() {
+        const tbody = document.getElementById('items-table-body');
+        if (currentItems.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-5 text-muted">В этой папке пока пусто</td></tr>';
+            return;
+        }
+
+        let html = '';
+        currentItems.forEach(item => {
+            const latestVer = item.versions && item.versions.length > 0 ? item.versions[0] : null;
+            const verBadge = latestVer ? `<span class="version-badge">${latestVer.version}</span>` : '<span class="badge bg-secondary">Нет файлов</span>';
+            const dlBtn = latestVer && latestVer.file ? `<a href="${latestVer.file}" target="_blank" class="btn btn-sm btn-success py-0 px-2" title="Скачать .ex5">💾</a>` : '';
+
+            let icon = '📄';
+            if (item.type === 'Indicator') icon = '📊';
+            else if (item.type === 'Expert') icon = '🤖';
+            else if (item.type === 'Book') icon = '📚';
+
+            html += `
+                <tr>
+                    <td class="ps-3">
+                        <input type="checkbox" class="form-check-input item-checkbox bg-dark border-secondary" value="${item.id}" onchange="updateDeployCount()">
+                    </td>
+                    <td>
+                        <strong class="text-light" style="cursor: pointer; border-bottom: 1px dashed #0dcaf0;" onclick="openItemDetails(${item.id})">${icon} ${item.name}</strong><br>
+                        <small class="text-muted">${item.default_target_path || 'Путь не задан'}</small>
+                    </td>
+                    <td class="text-secondary small">${item.type_display}</td>
+                    <td>${verBadge}</td>
+                    <td class="text-end pe-4">
+                        ${dlBtn}
+                        <button class="btn btn-sm btn-outline-info py-0 px-2 ms-1" onclick="openItemDetails(${item.id})">Скриншоты и Детали</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    // --- 4. МОДАЛКА ДЕТАЛЕЙ РЕСУРСА (ОБНОВЛЕННАЯ С КАРТОЧКАМИ ВЕРСИЙ) ---
+    function openItemDetails(id) {
+        const item = currentItems.find(i => i.id === id);
+        if (!item) return;
+
+        document.getElementById('detail-item-title').innerText = `${item.name} (${item.type_display})`;
+        document.getElementById('detail-item-desc').innerText = item.description || "Описания алгоритма пока нет.";
+
+        const container = document.getElementById('versions-container');
+
+        if (!item.versions || item.versions.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted p-4 border border-secondary rounded">Файлы и версии пока не загружены.</div>';
+        } else {
+            let html = '';
+            item.versions.forEach(v => {
+                const date = new Date(v.upload_date).toLocaleDateString('ru-RU');
+
+                const dlExec = v.file ? `<a href="${v.file}" target="_blank" class="btn btn-sm btn-success fw-bold py-1 px-3 me-2 shadow-sm">💾 Скачать .ex5</a>` : '';
+                const dlSrc = v.source_file ? `<a href="${v.source_file}" target="_blank" class="btn btn-sm btn-outline-info py-1 px-3 shadow-sm">📄 Исходный код</a>` : '';
+
+                const screenHtml = v.screenshot
+                    ? `<img src="${v.screenshot}" class="img-fluid rounded border border-secondary shadow-sm mb-2" style="cursor:zoom-in; width: 100%; object-fit: contain; max-height: 250px;" onclick="window.open('${v.screenshot}')" title="Открыть в полном размере">`
+                    : `<div class="text-muted small text-center p-4 border border-secondary rounded mb-2">Скриншот не прикреплен</div>`;
+
+                html += `
+                    <div class="card bg-black border-secondary mb-4 shadow-sm">
+                        <div class="card-header border-secondary d-flex justify-content-between align-items-center bg-dark py-2">
+                            <span class="text-info fw-bold fs-5">Версия: ${v.version}</span>
+                            <span class="text-muted small">Добавлено: ${date}</span>
+                        </div>
+                        <div class="card-body p-3">
+                            <div class="row g-4">
+                                <!-- Скриншот слева -->
+                                <div class="col-md-5 border-end border-secondary">
+                                    <h6 class="text-secondary small border-bottom border-secondary pb-1 mb-2">Скриншот графика:</h6>
+                                    ${screenHtml}
+                                </div>
+                                <!-- Текст и настройки справа -->
+                                <div class="col-md-7">
+                                    <h6 class="text-secondary small border-bottom border-secondary pb-1 mb-2">Что нового (Release Notes):</h6>
+                                    <p class="text-light small mb-3" style="white-space: pre-wrap;">${v.release_notes || 'Изменения не описаны.'}</p>
+
+                                    <h6 class="text-warning small border-bottom border-secondary pb-1 mb-2">Входящие параметры (Настройки):</h6>
+                                    <div class="bg-dark p-2 rounded border border-secondary small text-light" style="white-space: pre-wrap; font-family: 'Consolas', monospace; max-height: 180px; overflow-y: auto;">${v.input_parameters || 'Параметры не указаны.'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer border-secondary text-end p-2 bg-dark">
+                            ${dlExec} ${dlSrc}
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        new bootstrap.Modal(document.getElementById('itemDetailsModal')).show();
+    }
+
+    // --- 5. SMART DEPLOY (ГЕНЕРАТОР КОМАНД) ---
+    function toggleAllItems(source) {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = source.checked);
+        updateDeployCount();
+    }
+
+    function updateDeployCount() {
+        const count = document.querySelectorAll('.item-checkbox:checked').length;
+        document.getElementById('deploy-count').innerText = count;
+    }
+
+    function openDeployModal() {
+        const selected = document.querySelectorAll('.item-checkbox:checked');
+        if (selected.length === 0) return alert("Выберите хотя бы один файл галочкой для установки!");
+
+        generateDeployCode();
+        new bootstrap.Modal(document.getElementById('deployModal')).show();
+    }
+
+    function generateDeployCode() {
+        const os = document.getElementById('deploy-os').value;
+        const basePathRaw = document.getElementById('deploy-base-path').value.trim();
+        const basePath = basePathRaw.replace(/[\\/]+$/, '');
+
+        const selectedIds = Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => parseInt(cb.value));
+        const itemsToDeploy = currentItems.filter(i => selectedIds.includes(i.id));
+
+        let script = "";
+
+        if (os === 'powershell') {
+            script += "# --- Скрипт автоматической установки в MT5 (PowerShell) ---\n";
+            script += `Write-Host "Начинаем установку файлов..." -ForegroundColor Cyan\n\n`;
+
+            itemsToDeploy.forEach(item => {
+                if (!item.versions || item.versions.length === 0 || !item.versions[0].file) return;
+                const latest = item.versions[0];
+
+                const fileUrl = window.location.origin + latest.file;
+                let relPath = (item.default_target_path || '').replace(/^[\\/]+/, '');
+                let targetDir = basePath + "\\" + relPath;
+                targetDir = targetDir.replace(/[\\/]+$/, '');
+
+                const filename = latest.file.split('/').pop();
+                const fullTargetPath = targetDir + "\\" + filename;
+
+                script += `# Установка: ${item.name} (${latest.version})\n`;
+                script += `New-Item -ItemType Directory -Force -Path "${targetDir}" | Out-Null\n`;
+                script += `Invoke-WebRequest -Uri "${fileUrl}" -OutFile "${fullTargetPath}"\n`;
+                script += `Write-Host "Установлен: ${filename}" -ForegroundColor Green\n\n`;
+            });
+            script += `Write-Host "Установка завершена! Перезапустите MT5 или обновите навигатор." -ForegroundColor Yellow\n`;
+        }
+        else if (os === 'cmd') {
+            script += "@echo off\n";
+            script += "echo Начинаем установку файлов...\n\n";
+
+            itemsToDeploy.forEach(item => {
+                if (!item.versions || item.versions.length === 0 || !item.versions[0].file) return;
+                const latest = item.versions[0];
+                const fileUrl = window.location.origin + latest.file;
+
+                let relPath = (item.default_target_path || '').replace(/^[\\/]+/, '');
+                let targetDir = basePath + "\\" + relPath;
+                targetDir = targetDir.replace(/[\\/]+$/, '');
+
+                const filename = latest.file.split('/').pop();
+                const fullTargetPath = targetDir + "\\" + filename;
+
+                script += `:: Установка: ${item.name} (${latest.version})\n`;
+                script += `if not exist "${targetDir}" mkdir "${targetDir}"\n`;
+                script += `curl -L "${fileUrl}" -o "${fullTargetPath}"\n`;
+                script += `echo Установлен: ${filename}\n\n`;
+            });
+            script += "echo Установка завершена! Перезапустите MT5.\npause\n";
+        }
+        else if (os === 'bash') {
+            script += "#!/bin/bash\n";
+            script += "echo \"Начинаем установку файлов...\"\n\n";
+
+            let unixBasePath = basePath.replace(/\\/g, '/');
+
+            itemsToDeploy.forEach(item => {
+                if (!item.versions || item.versions.length === 0 || !item.versions[0].file) return;
+                const latest = item.versions[0];
+                const fileUrl = window.location.origin + latest.file;
+
+                let relPath = (item.default_target_path || '').replace(/^[\\/]+/, '').replace(/\\/g, '/');
+                let targetDir = unixBasePath + "/" + relPath;
+                targetDir = targetDir.replace(/\/+$/, '');
+
+                const filename = latest.file.split('/').pop();
+                const fullTargetPath = targetDir + "/" + filename;
+
+                script += `# Установка: ${item.name} (${latest.version})\n`;
+                script += `mkdir -p "${targetDir}"\n`;
+                script += `wget -O "${fullTargetPath}" "${fileUrl}"\n`;
+                script += `echo "Установлен: ${filename}"\n\n`;
+            });
+            script += "echo \"Установка завершена!\"\n";
+        }
+
+        document.getElementById('deploy-code-output').value = script;
+    }
+
+    function copyDeployCode() {
+        const text = document.getElementById('deploy-code-output').value;
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Код скопирован! Вставьте его в терминал (PowerShell / CMD / Bash).");
+        });
+    }
+
+    // --- 6. СОЗДАНИЕ ПАПОК И РЕСУРСОВ ---
+    function openAddCategoryModal() {
+        new bootstrap.Modal(document.getElementById('addCategoryModal')).show();
+    }
+
+    function openAddItemModal() {
+        new bootstrap.Modal(document.getElementById('addItemModal')).show();
+    }
+
+    async function submitCategory() {
+        const name = document.getElementById('new-cat-name').value.trim();
+        const parentId = document.getElementById('new-cat-parent').value;
+        if (!name) return alert("Введите название папки!");
+
+        const payload = { name: name };
+        if (parentId) payload.parent = parseInt(parentId);
+
+        const btn = event.target;
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/catalog/categories/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('addCategoryModal')).hide();
+                document.getElementById('new-cat-name').value = '';
+                loadCatalogTree();
+            } else {
+                alert("Ошибка при создании папки");
+            }
+        } catch (e) {
+            alert("Ошибка сети");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function submitItem() {
+        const name = document.getElementById('new-item-name').value.trim();
+        const type = document.getElementById('new-item-type').value;
+        const categoryId = document.getElementById('new-item-category').value;
+        const targetPath = document.getElementById('new-item-path').value.trim();
+        const description = document.getElementById('new-item-desc').value.trim();
+
+        if (!name || !categoryId) return alert("Заполните название и выберите папку!");
+
+        const payload = {
+            name: name,
+            type: type,
+            category: parseInt(categoryId),
+            default_target_path: targetPath,
+            description: description
+        };
+
+        const btn = event.target;
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/catalog/items/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+                document.getElementById('new-item-name').value = '';
+                document.getElementById('new-item-desc').value = '';
+
+                if (currentCategoryId == categoryId) {
+                    selectCategory(currentCategoryId, document.getElementById('current-category-title').innerText.replace('📂 ', ''));
+                }
+                alert("Карточка успешно создана! Зайдите в Админ-панель Django, чтобы прикрепить файлы, исходники и скриншоты в 'Версии ресурсов'.");
+            } else {
+                alert("Ошибка при создании ресурса");
+            }
+        } catch (e) {
+            alert("Ошибка сети");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

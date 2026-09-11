@@ -26,6 +26,7 @@ urlpatterns = [
     path('backtest/', views.backtest_page, name='backtest'),
     path('backtest_api/', views.backtest_grid_api),
     path('guide/', views.guide_page, name='guide'),
+    path('catalog/', TemplateView.as_view(template_name='catalog.html'), name='catalog'),
 ]
 
 # Раздача картинок для разработчика

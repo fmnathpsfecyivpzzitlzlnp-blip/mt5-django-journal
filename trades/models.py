@@ -210,3 +210,93 @@ class DailyBacktest(models.Model):
 
     def __str__(self):
         return f"Бэктест {self.user.username} - {self.date}"
+
+
+class CatalogCategory(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Название категории")
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name="Родительская категория"
+    )
+
+    class Meta:
+        verbose_name = "Категория каталога"
+        verbose_name_plural = "Категории каталога"
+
+    def __str__(self):
+        full_path = [self.name]
+        k = self.parent
+        while k is not None:
+            full_path.append(k.name)
+            k = k.parent
+        return ' ➔ '.join(full_path[::-1])
+
+
+class CatalogItem(models.Model):
+    ITEM_TYPES = [
+        ('Indicator', 'Индикатор'),
+        ('Expert', 'Эксперт'),
+        ('Script', 'Скрипт'),
+        ('Utility', 'Утилита (Python)'),
+        ('Book', 'Книга'),
+    ]
+
+    name = models.CharField(max_length=255, verbose_name="Название ресурса")
+    type = models.CharField(max_length=50, choices=ITEM_TYPES, verbose_name="Тип")
+    category = models.ForeignKey(
+        CatalogCategory,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name="Категория"
+    )
+    default_target_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Стандартный путь на ПК",
+        help_text="Например: \\MQL5\\Indicators\\MyCustom\\"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Общее описание (что делает)"
+    )
+
+    class Meta:
+        verbose_name = "Ресурс каталога"
+        verbose_name_plural = "Ресурсы каталога"
+        ordering = ['name']
+
+    def __str__(self):
+        return f"[{self.get_type_display()}] {self.name}"
+
+
+class ItemVersion(models.Model):
+    item = models.ForeignKey(
+        CatalogItem,
+        on_delete=models.CASCADE,
+        related_name='versions',
+        verbose_name="Ресурс"
+    )
+    version = models.CharField(max_length=50, verbose_name="Версия", help_text="Например: v2.1")
+
+    file = models.FileField(upload_to='catalog/compiled/', verbose_name="Исполняемый файл (.ex5)")
+    source_file = models.FileField(upload_to='catalog/sources/', blank=True, null=True,
+                                   verbose_name="Исходный код (.mq5, .py)")
+    screenshot = models.ImageField(upload_to='catalog/screens/', blank=True, null=True, verbose_name="Скриншот графика")
+
+    release_notes = models.TextField(blank=True, null=True, verbose_name="Описание изменений (Что добавлено)")
+    input_parameters = models.TextField(blank=True, null=True, verbose_name="Входящие параметры")
+    upload_date = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
+
+    class Meta:
+        ordering = ['-upload_date']
+        verbose_name = "Версия ресурса"
+        verbose_name_plural = "Версии ресурсов"
+
+    def __str__(self):
+        return f"{self.item.name} - {self.version}"

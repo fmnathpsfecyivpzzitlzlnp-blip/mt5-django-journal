@@ -20,4 +20,5 @@ __pycache__/
 
 # Игнорируем локальные отчеты и PDF
 doc/pdf/
+doc/plan/
 *.pdf

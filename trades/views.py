@@ -62,6 +62,9 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.core.cache import cache # 👈 ДОБАВЛЯЕМ ИМПОРТ КЭША
 
+from rest_framework import viewsets, serializers
+from .models import CatalogCategory, CatalogItem, ItemVersion
+
 BROKER_TZ = pytz.timezone('Europe/Helsinki')
 
 
@@ -1454,3 +1457,51 @@ class AIForecastView(APIView):
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
+
+
+# --- СЕРИАЛИЗАТОРЫ ДЛЯ КАТАЛОГА ---
+class ItemVersionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemVersion
+        fields = '__all__'
+
+
+class CatalogItemSerializer(serializers.ModelSerializer):
+    versions = ItemVersionSerializer(many=True, read_only=True)
+    type_display = serializers.CharField(source='get_type_display', read_only=True)
+
+    class Meta:
+        model = CatalogItem
+        fields = '__all__'
+
+
+class CatalogCategorySerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CatalogCategory
+        fields = ['id', 'name', 'parent', 'children']
+
+    def get_children(self, obj):
+        # Рекурсивно собираем все вложенные папки
+        return CatalogCategorySerializer(obj.children.all(), many=True).data
+
+
+# --- VIEWSETS ДЛЯ КАТАЛОГА ---
+class CatalogCategoryViewSet(viewsets.ModelViewSet):
+    # Отдаем только корневые папки (остальные подтянутся как children)
+    queryset = CatalogCategory.objects.filter(parent__isnull=True)
+    serializer_class = CatalogCategorySerializer
+
+
+class CatalogItemViewSet(viewsets.ModelViewSet):
+    queryset = CatalogItem.objects.all()
+    serializer_class = CatalogItemSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Позволяет фильтровать элементы при клике на конкретную папку
+        category_id = self.request.query_params.get('category_id')
+        if category_id:
+            qs = qs.filter(category_id=category_id)
+        return qs
