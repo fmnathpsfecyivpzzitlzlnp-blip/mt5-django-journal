@@ -8,6 +8,7 @@ from trades import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('tinymce/', include('tinymce.urls')),
 
     # Ссылки на API (они передаются во второй файл)
     path('api/', include('trades.urls')),

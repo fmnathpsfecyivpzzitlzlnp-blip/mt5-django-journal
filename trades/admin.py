@@ -1,5 +1,7 @@
 from django.contrib import admin
 from .models import Trade, PlaybookPattern
+from django.db import models
+from tinymce.widgets import TinyMCE
 from .models import CatalogCategory, CatalogItem, ItemVersion
 
 @admin.register(Trade)
@@ -22,6 +24,32 @@ class PlaybookPatternAdmin(admin.ModelAdmin):
     list_display = ('title', 'market_trend', 'entry_logic', 'created_at')
     list_filter = ('market_trend', 'entry_logic')
 
+
+# 1. Создаем встраиваемый блок (Inline) для Версий
+class ItemVersionInline(admin.StackedInline):
+    model = ItemVersion
+    extra = 1  # По умолчанию открывать одну пустую форму для загрузки
+
+    # Автоматически заменяем обычные текстовые поля на HTML-редактор TinyMCE
+    formfield_overrides = {
+        models.TextField: {'widget': TinyMCE(attrs={'cols': 80, 'rows': 15})},
+    }
+
+
+# 2. Настраиваем главную карточку ресурса
+class CatalogItemAdmin(admin.ModelAdmin):
+    list_display = ('name', 'type', 'category')
+
+    # Встраиваем блок загрузки файлов и скриншотов ПРЯМО СЮДА
+    inlines = [ItemVersionInline]
+
+    # Для главного описания ресурса тоже включаем TinyMCE
+    formfield_overrides = {
+        models.TextField: {'widget': TinyMCE(attrs={'cols': 80, 'rows': 10})},
+    }
+
+
+# Регистрируем в админке
 admin.site.register(CatalogCategory)
-admin.site.register(CatalogItem)
-admin.site.register(ItemVersion)
+admin.site.register(CatalogItem, CatalogItemAdmin)
+admin.site.register(ItemVersion)  # Отдельная ссылка пусть останется для удобства

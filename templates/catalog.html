@@ -30,6 +30,8 @@
 
     .version-badge { font-size: 0.8rem; background-color: #198754; padding: 3px 7px; border-radius: 4px; color: white; }
 </style>
+<!-- Подключаем TinyMCE для фронтенда -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.2/tinymce.min.js" referrerpolicy="origin"></script>
 {% endblock %}
 
 {% block content %}
@@ -104,7 +106,8 @@
             <div class="modal-body p-4 text-light" style="background-color: #121212;">
 
                 <h6 class="text-secondary small border-bottom border-secondary pb-1 mb-2">Общее описание алгоритма:</h6>
-                <p id="detail-item-desc" class="text-light small mb-4" style="white-space: pre-wrap;"></p>
+                <!-- Выводим как HTML, чтобы TinyMCE стили работали корректно -->
+                <div id="detail-item-desc" class="text-light small mb-4"></div>
 
                 <h5 class="text-success border-bottom border-success pb-2 mb-4">🔄 История версий и файлы</h5>
 
@@ -194,8 +197,9 @@
 </div>
 
 <!-- Модалка: Добавить Ресурс -->
+<!-- ИЗМЕНЕН КЛАСС НА modal-lg ЧТОБЫ ВМЕСТИТЬ TINYMCE -->
 <div class="modal fade" id="addItemModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content bg-dark border-success">
             <div class="modal-header bg-black border-secondary">
                 <h5 class="modal-title text-success">➕ Добавить ресурс (Индикатор/Бот)</h5>
@@ -232,6 +236,7 @@
                     </div>
                     <div class="col-md-12">
                         <label class="small text-secondary mb-1">Описание (Что делает)</label>
+                        <!-- TINYMCE РЕДАКТОР -->
                         <textarea id="new-item-desc" class="form-control bg-black text-light border-secondary" rows="2" placeholder="Краткое описание функционала..."></textarea>
                     </div>
                 </div>
@@ -252,8 +257,56 @@
     let currentItems = [];
     let flatCategoriesList = [];
 
+    // --- FIX FOCUS ISSUES FOR TINYMCE INSIDE BOOTSTRAP MODALS ---
+    document.addEventListener('focusin', (e) => {
+        if (e.target.closest(".tox-tinymce-aux, .moxman-window, .tam-assetmanager-root")) {
+            e.stopImmediatePropagation();
+        }
+    });
+
     document.addEventListener("DOMContentLoaded", () => {
         loadCatalogTree();
+
+        // ИНИЦИАЛИЗАЦИЯ TINYMCE
+        tinymce.init({
+            selector: '#new-item-desc',
+            promotion: false,
+            license_key: 'gpl',
+            height: 350,
+            menubar: false, // Отключаем верхнее меню для компактности в модалке
+            skin: 'oxide-dark',
+            content_css: 'dark',
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                'insertdatetime', 'table', 'wordcount', 'codesample'
+            ],
+            toolbar: 'undo redo | bold italic forecolor | codesample | alignleft aligncenter alignright alignjustify | bullist numlist | link image | removeformat | fullscreen',
+            codesample_languages: [
+                {text: 'HTML/XML', value: 'markup'},
+                {text: 'JavaScript', value: 'javascript'},
+                {text: 'JSON', value: 'json'},
+                {text: 'CSS', value: 'css'},
+                {text: 'Python', value: 'python'},
+                {text: 'C++', value: 'cpp'}
+            ],
+            image_title: true,
+            automatic_uploads: true,
+            file_picker_types: 'image',
+            // Конвертируем картинки в base64 при вставке (Ctrl+V)
+            images_upload_handler: function (blobInfo, progress) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blobInfo.blob());
+                    reader.onload = function () { resolve(reader.result); };
+                    reader.onerror = function (error) { reject({ message: 'Ошибка чтения: ' + error.message, remove: true }); };
+                });
+            },
+            setup: function(editor) {
+                editor.on('change', function () { editor.save(); });
+            },
+            verify_html: false
+        });
     });
 
     // --- 1. ЗАГРУЗКА И ОТРИСОВКА ДЕРЕВА ---
@@ -346,13 +399,11 @@
     async function selectCategory(id, name) {
         currentCategoryId = id;
 
-        // Подсветка активной папки
         document.querySelectorAll('.tree-node').forEach(el => el.classList.remove('active'));
         document.getElementById(`node-${id}`).classList.add('active');
 
         document.getElementById('current-category-title').innerText = `📂 ${name}`;
 
-        // Показываем кнопку удаления папки
         document.getElementById('btn-delete-cat').classList.remove('d-none');
 
         document.getElementById('items-table-body').innerHTML = '<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-info" role="status"></div></td></tr>';
@@ -408,13 +459,14 @@
         tbody.innerHTML = html;
     }
 
-    // --- 4. МОДАЛКА ДЕТАЛЕЙ РЕСУРСА (ОБНОВЛЕННАЯ С КАРТОЧКАМИ ВЕРСИЙ) ---
+    // --- 4. МОДАЛКА ДЕТАЛЕЙ РЕСУРСА (РЕНДЕР HTML ОТ TINYMCE) ---
     function openItemDetails(id) {
         const item = currentItems.find(i => i.id === id);
         if (!item) return;
 
         document.getElementById('detail-item-title').innerText = `${item.name} (${item.type_display})`;
-        document.getElementById('detail-item-desc').innerText = item.description || "Описания алгоритма пока нет.";
+        // ВАЖНО: Используем innerHTML, чтобы TinyMCE стили отрендерились как нужно
+        document.getElementById('detail-item-desc').innerHTML = item.description || "Описания алгоритма пока нет.";
 
         const container = document.getElementById('versions-container');
 
@@ -448,10 +500,12 @@
                                 <!-- Текст и настройки справа -->
                                 <div class="col-md-7">
                                     <h6 class="text-secondary small border-bottom border-secondary pb-1 mb-2">Что нового (Release Notes):</h6>
-                                    <p class="text-light small mb-3" style="white-space: pre-wrap;">${v.release_notes || 'Изменения не описаны.'}</p>
+                                    <div class="text-light small mb-3">${v.release_notes || 'Изменения не описаны.'}</div>
 
                                     <h6 class="text-warning small border-bottom border-secondary pb-1 mb-2">Входящие параметры (Настройки):</h6>
-                                    <div class="bg-dark p-2 rounded border border-secondary small text-light" style="white-space: pre-wrap; font-family: 'Consolas', monospace; max-height: 180px; overflow-y: auto;">${v.input_parameters || 'Параметры не указаны.'}</div>
+                                    <div class="bg-dark p-2 rounded border border-secondary small text-light" style="max-height: 250px; overflow-y: auto;">
+                                        ${v.input_parameters || 'Параметры не указаны.'}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -623,7 +677,11 @@
         const type = document.getElementById('new-item-type').value;
         const categoryId = document.getElementById('new-item-category').value;
         const targetPath = document.getElementById('new-item-path').value.trim();
-        const description = document.getElementById('new-item-desc').value.trim();
+
+        // Извлекаем HTML контент из TinyMCE
+        const description = tinymce.get('new-item-desc')
+            ? tinymce.get('new-item-desc').getContent()
+            : document.getElementById('new-item-desc').value.trim();
 
         if (!name || !categoryId) return alert("Заполните название и выберите папку!");
 
@@ -647,7 +705,10 @@
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
                 document.getElementById('new-item-name').value = '';
-                document.getElementById('new-item-desc').value = '';
+
+                // Очищаем редактор после успешной отправки
+                if (tinymce.get('new-item-desc')) tinymce.get('new-item-desc').setContent('');
+                else document.getElementById('new-item-desc').value = '';
 
                 if (currentCategoryId == categoryId) {
                     selectCategory(currentCategoryId, document.getElementById('current-category-title').innerText.replace('📂 ', ''));

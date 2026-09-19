@@ -47,9 +47,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Твои добавленные приложения:
-    'rest_framework',  # <--- ВОТ ЭТА СТРОКА РЕШАЕТ ПРОБЛЕМУ
+    'rest_framework',
     'corsheaders',
+    'tinymce',
     'trades',
 ]
 
@@ -156,6 +156,50 @@ REST_FRAMEWORK = {
         'trades.authentication.CsrfExemptSessionAuthentication',  # 👈 Изменили путь здесь
         'rest_framework.authentication.BasicAuthentication',
     ),
+}
+
+# --- НАСТРОЙКИ ВИЗУАЛЬНОГО РЕДАКТОРА TINYMCE ---
+TINYMCE_DEFAULT_CONFIG = {
+    'height': 500,
+    'promotion': False,
+    'license_key': 'gpl',
+    'menubar': True,
+    # Принудительно включаем темную тему, чтобы не слепило глаза в админке
+    'skin': 'oxide-dark',
+    'content_css': 'dark',
+
+    # Твои плагины
+    'plugins': 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime table help wordcount codesample',
+
+    # Твоя панель инструментов (много кнопок)
+    'toolbar': 'undo redo | blocks | bold italic forecolor | codesample | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | table link image | removeformat | fullscreen',
+
+    # Подсветка синтаксиса кода
+    'codesample_languages': [
+        {'text': 'HTML/XML', 'value': 'markup'},
+        {'text': 'JavaScript', 'value': 'javascript'},
+        {'text': 'JSON', 'value': 'json'},
+        {'text': 'CSS', 'value': 'css'},
+        {'text': 'Python', 'value': 'python'},
+        {'text': 'C++', 'value': 'cpp'}
+    ],
+
+    'image_title': True,
+    'automatic_uploads': True,
+    'file_picker_types': 'image',
+
+    # Разрешает вставлять скриншоты из буфера обмена (Ctrl+V)
+    # и автоматически конвертирует их в base64 прямо в HTML-код!
+    'paste_data_images': True,
+
+    'table_default_attributes': {
+        'border': '1'
+    },
+    'table_default_styles': {
+        'width': '100%',
+        'border-collapse': 'collapse'
+    },
+    'verify_html': False,
 }
 
 
